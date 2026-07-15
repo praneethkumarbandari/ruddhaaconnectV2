@@ -1,0 +1,101 @@
+<!--
+  layouts/shell.html — CANONICAL SHELL TEMPLATE (reference copy)
+  ================================================================
+  This file is not loaded directly by the app. Static hosting (Netlify,
+  no server-side includes) means there's no way for 49 separate pages
+  to literally "include" one physical HTML file at request time. So
+  each real outer page (e.g. /invoices.html) embeds this exact
+  skeleton directly, with one line changed:
+
+      <script>window.__RUDDHAA_CONTENT_PAGE__ = 'invoices.html';</script>
+
+  This is the ONE place that skeleton is defined and documented. If
+  you add a new page to the ERP, copy this file's <body> verbatim into
+  the new outer page and set __RUDDHAA_CONTENT_PAGE__ to the matching
+  file in content/.
+
+  Everything that is actually shared — the sidebar markup, the topbar
+  markup, all the wiring logic (theme, auth, highlighting, iframe
+  routing, Lucky gating) — lives in components/sidebar.html,
+  components/topbar.html, and js/shell.js respectively, fetched once
+  per page load. Only this small skeleton (a handful of empty mount
+  points) is duplicated per page, which is standard for a static site
+  with no build step and is NOT the kind of duplication the shell
+  conversion was about eliminating (that was the old ~200-line
+  hand-copied sidebar per page, now down to zero).
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RuddhaConnect</title>
+
+<!-- Set BEFORE shell.js runs. This is the only per-page line. -->
+<script>window.__RUDDHAA_CONTENT_PAGE__ = 'business-dashboard.html';</script>
+
+<!-- Apply cached theme immediately — prevents a flash of default colors -->
+<script>
+(function(){
+  try{
+    var t=JSON.parse(localStorage.getItem('portalTheme')||'{}');
+    if(t.primary_color)    document.documentElement.style.setProperty('--primary-color',t.primary_color);
+    if(t.secondary_color)  document.documentElement.style.setProperty('--secondary-color',t.secondary_color);
+    if(t.background_color) document.documentElement.style.setProperty('--background-color',t.background_color);
+    if(t.font_family)      document.documentElement.style.setProperty('--font-family',t.font_family);
+  }catch(e){}
+})();
+</script>
+
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<!-- NOTE: css/lucky/lucky.css is deliberately NOT linked here. It is
+     loaded dynamically by shell.js only when window.LUCKY_ENABLED is
+     true, so Lucky has zero footprint (not even an unused stylesheet)
+     when the feature flag is off. -->
+
+<style>
+  #contentFrame {
+    display: block;
+    width: 100%;
+    border: 0;
+    height: calc(100vh - var(--header-height));
+    background: var(--background-color, #f5f7fb);
+  }
+  .main#mainArea { padding: 0 !important; }
+</style>
+</head>
+<body>
+
+<!-- ══ TOPBAR (fetched + injected by shell.js from components/topbar.html) ══ -->
+<div id="topbarMount"></div>
+
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<div class="shell">
+  <!-- ══ SIDEBAR (fetched + injected by shell.js from components/sidebar.html) ══ -->
+  <div id="sidebarMount"></div>
+
+  <!-- ══ MAIN CONTENT FRAME ══ -->
+  <main class="main" id="mainArea">
+    <iframe id="contentFrame" title="Page content"></iframe>
+  </main>
+</div>
+
+<!-- Lucky is intentionally absent from this skeleton. shell.js injects
+     it conditionally, only when window.LUCKY_ENABLED === true. -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/lucky/lucky-config.js"></script>
+<script src="/js/shell.js"></script>
+</body>
+</html>
