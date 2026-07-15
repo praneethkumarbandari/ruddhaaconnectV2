@@ -1,0 +1,41 @@
+-- ================================================================
+-- schema-je-no-financial-year-scope-fix.sql
+--
+-- CRITICAL FIX: journal_entries.je_no had a GLOBAL `unique` constraint,
+-- but voucher numbering (lib/number-generator.ts' nextDocumentNumber())
+-- is explicitly financial-year-scoped by design -- every financial
+-- year's counter for a given document_type restarts at 1 (see
+-- numbering_sequences' primary key: (document_type, financial_year_id)).
+--
+-- The practical effect of the bug this fixes: the very first journal
+-- entry of a company's SECOND financial year would always collide with
+-- "JE-0001" from its first year (same for every other je_no the two
+-- years happen to share), making it impossible to post anything once a
+-- fiscal year rolls over -- not an edge case, a certainty for every
+-- real deployment within about a year of go-live.
+--
+-- Found via a live, reproduced failure: posting a payroll run's
+-- accrual (dated within a historical test period) and its payment
+-- settlement (dated "today", a different financial year) in the same
+-- run produced exactly this collision.
+--
+-- This does not touch numbering_sequences (already correctly scoped)
+-- or postJournalEntry()'s logic (already correctly resolves fy.id
+-- per entry) -- only the table constraint was wrong.
+--
+-- NOTE: sales_invoices.invoice_no, purchase_invoices.purchase_no,
+-- receipts.receipt_no, payments.payment_no, credit_notes.credit_note_no,
+-- and debit_notes.debit_note_no all go through the exact same
+-- nextDocumentNumber() mechanism and currently have the same kind of
+-- bare `unique` constraint -- the same latent bug almost certainly
+-- exists there too. They are NOT fixed here because, unlike
+-- journal_entries, none of those six tables currently store a
+-- financial_year_id column to scope the constraint against; fixing them
+-- requires first adding that column (and backfilling it from each
+-- table's own date column via financial_years), which is a larger,
+-- separate migration that deserves its own careful review rather than
+-- being bundled into this fix.
+-- ================================================================
+
+alter table journal_entries drop constraint if exists journal_entries_je_no_key;
+alter table journal_entries add constraint journal_entries_je_no_fy_unique unique (je_no, financial_year_id);

@@ -1,0 +1,18 @@
+-- ============================================================
+-- TDS DEDUCTION REVERSAL TRACKING
+-- ============================================================
+-- FIX: cancelPayment() reversed the underlying journal entry and
+-- marked the payment cancelled, but never touched tds_deductions at
+-- all — confirmed live via review. A cancelled payment's TDS
+-- deduction stayed in the register as if it had genuinely happened,
+-- meaning Form 16A and 26Q summaries (which read directly from this
+-- table) would overstate what was actually withheld and remitted.
+--
+-- Same principle already used everywhere else in this system
+-- (reverseJournalEntry() never flips the original entry to
+-- 'cancelled', it stays 'posted' forever with only a reversal link) —
+-- a reversed deduction is not deleted, just marked, so the register
+-- remains a complete, honest history: "this was deducted, and later
+-- reversed," not silently erased as if it never existed.
+-- ============================================================
+alter table tds_deductions add column if not exists reversed_at timestamptz;
