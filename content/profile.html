@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Profile</title>
+<script>
+        (function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');
+            if(t.primary_color)    document.documentElement.style.setProperty('--primary-color',t.primary_color);
+            if(t.secondary_color)  document.documentElement.style.setProperty('--secondary-color',t.secondary_color);
+            if(t.background_color) document.documentElement.style.setProperty('--background-color',t.background_color);
+            if(t.font_family)      document.documentElement.style.setProperty('--font-family',t.font_family);
+        }catch(e){}}());
+    </script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .save-msg, .err-msg { display:none; font-size:13px; font-weight:600; margin-left:10px; }
+  .save-msg.show { display:inline; color:#2e7d32; }
+  .err-msg.show { display:inline; color:#c62828; }
+  .save-row { display:flex; align-items:center; gap:10px; margin-top:16px; }
+  .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:10px; }
+  @media(max-width:700px){ .settings-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<!--
+  FIX: this page exists so Reset Password stays reachable by every
+  employee via the topbar Profile button, independent of whatever
+  Settings itself ends up gated to (Settings is being restricted to
+  admins — this page deliberately is not, since everyone needs to be
+  able to change their own password regardless of role). Same working
+  logic as settings.html's old User Profile / Reset Password sections,
+  just on its own page rather than buried inside an admin-only one.
+-->
+
+<div class="page-header"><h2>My Profile</h2></div>
+
+<div class="card" style="max-width:640px;">
+  <h3>Account Details</h3>
+  <div class="settings-grid">
+    <div class="field"><label>Name</label><input type="text" id="pName" readonly style="background:#f0f2f5;"></div>
+    <div class="field"><label>Username</label><input type="text" id="pUsername" readonly style="background:#f0f2f5;"></div>
+    <div class="field"><label>Role</label><input type="text" id="pRole" readonly style="background:#f0f2f5;"></div>
+    <div class="field"><label>Email</label><input type="text" id="pEmail" readonly style="background:#f0f2f5;"></div>
+  </div>
+</div>
+
+<div class="card" style="max-width:640px;">
+  <h3>Change Password</h3>
+  <div class="settings-grid">
+    <div class="field"><label>Current Password</label><input type="password" id="pwCurrent" autocomplete="current-password"></div>
+    <div class="field"><label>New Password</label><input type="password" id="pwNew" autocomplete="new-password" placeholder="min 6 characters"></div>
+    <div class="field"><label>Confirm New Password</label><input type="password" id="pwConfirm" autocomplete="new-password"></div>
+  </div>
+  <div class="save-row">
+    <button class="btn-primary" onclick="changePassword()">Update Password</button>
+    <span class="save-msg" id="pwSaveMsg">✓ Password updated!</span>
+    <span class="err-msg" id="pwErrMsg">Could not update password.</span>
+  </div>
+</div>
+
+<script>
+function setField(id,val){const el=document.getElementById(id);if(el&&val!=null)el.value=val;}
+
+window.addEventListener('DOMContentLoaded', function(){
+  const emp = window.Auth ? window.Auth.getEmployee() : JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+  if(!emp){ window.top.location.href='/business-login.html'; return; }
+  setField('pName', emp.employeeName || emp.name);
+  setField('pUsername', emp.username);
+  setField('pRole', emp.role);
+  setField('pEmail', emp.email);
+});
+
+async function changePassword(){
+  const cur=document.getElementById('pwCurrent').value;
+  const nw=document.getElementById('pwNew').value;
+  const conf=document.getElementById('pwConfirm').value;
+  const sMsg=document.getElementById('pwSaveMsg'), eMsg=document.getElementById('pwErrMsg');
+  sMsg.classList.remove('show'); eMsg.classList.remove('show');
+  if(!cur||!nw||nw.length<6||nw!==conf){
+    eMsg.textContent='Fill all fields — new password must be 6+ characters and match confirmation.';
+    eMsg.classList.add('show'); setTimeout(()=>eMsg.classList.remove('show'),4000);
+    return;
+  }
+  try{
+    await window.Api.post('/auth/change-password', {current_password:cur, new_password:nw});
+    sMsg.classList.add('show'); setTimeout(()=>sMsg.classList.remove('show'),3000);
+    document.getElementById('pwCurrent').value='';
+    document.getElementById('pwNew').value='';
+    document.getElementById('pwConfirm').value='';
+  }catch(e){
+    eMsg.textContent=(e&&e.message)||'Could not update password.';
+    eMsg.classList.add('show'); setTimeout(()=>eMsg.classList.remove('show'),4000);
+  }
+}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/toast.js"></script>
+</body>
+</html>

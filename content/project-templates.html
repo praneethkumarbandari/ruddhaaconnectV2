@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Templates</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .template-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; }
+  .template-badge.standard { background: #eef2ff; color: #4338ca; }
+  .template-badge.custom { background: #e6f7ec; color: #1c7a3c; }
+  .level-chip { display: inline-block; padding: 3px 10px; border-radius: 6px; background: #f4f5f8; font-size: 12px; margin: 2px; }
+  .level-chip .arrow { color: #aaa; margin: 0 4px; }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Project Templates</h2>
+  </div>
+  <!--
+    Project Engine — Phase 1. Standard templates (system-owned) are
+    never edited in place — "Copy to Customize" is the only path to
+    an editable template, producing an independent row that future
+    standard-template versions never affect. See
+    src/lib/project-templates.ts for the full reasoning.
+  -->
+  <table class="data-table">
+    <thead><tr><th>Template</th><th>Type</th><th>Hierarchy</th><th>Statuses</th><th>Actions</th></tr></thead>
+    <tbody id="tplBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- Copy modal -->
+<div class="modal" id="copyModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3>Copy Template to Customize</h3><button class="modal-close" onclick="closeModal('copyModal')">&times;</button></div>
+    <div class="modal-body">
+      <p style="color:#8a93a6;font-size:13px;">This creates your own independent copy of <strong id="copySourceName"></strong>. Editing the copy never affects the standard template, and future Ruddhaa updates never affect your copy.</p>
+      <div class="field"><label>Name for your copy *</label><input type="text" id="copyName"></div>
+      <div class="err-msg" id="copyErr"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('copyModal')">Cancel</button><button class="btn-primary" onclick="saveCopy()">Create Copy</button></div>
+  </div>
+</div>
+
+<!-- View/Edit levels modal -->
+<div class="modal" id="levelsModal">
+  <div class="modal-content" style="max-width:640px;">
+    <div class="modal-header"><h3 id="levelsModalTitle">Hierarchy Levels</h3><button class="modal-close" onclick="closeModal('levelsModal')">&times;</button></div>
+    <div class="modal-body">
+      <table class="data-table" style="margin-bottom:10px;">
+        <thead><tr><th>Level Code</th><th>Display Name</th><th>Parent Level</th><th>Order</th></tr></thead>
+        <tbody id="levelsBody"></tbody>
+      </table>
+      <p id="levelsReadOnlyNote" style="color:#8a93a6;font-size:12px;">Standard template — read-only. Copy this template to edit its levels.</p>
+      <div id="levelsEditArea" style="display:none;">
+        <button class="btn-secondary" onclick="addLevelRow()"><i class="fa-solid fa-plus"></i> Add Level</button>
+      </div>
+      <div class="err-msg" id="levelsErr"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('levelsModal')">Close</button>
+      <button class="btn-primary" id="levelsSaveBtn" style="display:none;" onclick="saveLevels()">Save Levels</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let templates = [], editingTemplateId = null, copySourceId = null, editableLevels = [];
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+  setupSidebar();
+  loadTemplates();
+});
+
+async function loadTemplates(){
+  const body = document.getElementById('tplBody');
+  try{
+    templates = await window.Api.get('/project-templates');
+    if(!templates.length){ body.innerHTML = '<tr><td colspan="5" class="empty-state">No templates found.</td></tr>'; return; }
+    const rows = await Promise.all(templates.map(async t => {
+      const full = await window.Api.get('/project-templates/'+t.id).catch(()=>({levels:[],statuses:[]}));
+      return { ...t, levels: full.levels||[], statuses: full.statuses||[] };
+    }));
+    body.innerHTML = rows.map(t => `<tr>
+      <td>${escapeHtml(t.template_name)}${t.is_standard?'':''} <span style="color:#aaa;font-size:11px;">v${t.version}</span></td>
+      <td><span class="template-badge ${t.is_standard?'standard':'custom'}">${t.is_standard?'Standard':'Custom'}</span></td>
+      <td>${renderLevelChips(t.levels)}</td>
+      <td>${t.statuses.map(s=>escapeHtml(s.display_name)).join(', ')}</td>
+      <td>
+        <button class="action-btn" onclick="viewLevels(${t.id})"><i class="fa-solid fa-eye"></i> ${t.is_standard?'View':'Edit'} Levels</button>
+        ${t.is_standard ? `<button class="action-btn" onclick="openCopyModal(${t.id}, '${escapeHtml(t.template_name).replace(/'/g,"&#39;")}')"><i class="fa-solid fa-copy"></i> Copy to Customize</button>` : ''}
+      </td>
+    </tr>`).join('');
+  }catch(e){
+    body.innerHTML = '<tr><td colspan="5" class="empty-state">Could not load templates: '+escapeHtml(e.message||'Unknown error')+'</td></tr>';
+  }
+}
+
+function renderLevelChips(levels){
+  if(!levels.length) return '<span style="color:#aaa;">(project only)</span>';
+  const sorted = [...levels].sort((a,b)=>a.sort_order-b.sort_order);
+  return 'Project' + sorted.map(l=>`<span class="arrow">→</span><span class="level-chip">${escapeHtml(l.display_name)}</span>`).join('');
+}
+
+function openCopyModal(id, name){
+  copySourceId = id;
+  document.getElementById('copySourceName').textContent = name;
+  document.getElementById('copyName').value = name + ' (Custom)';
+  document.getElementById('copyErr').style.display = 'none';
+  document.getElementById('copyModal').classList.add('active');
+}
+async function saveCopy(){
+  const newTemplateName = document.getElementById('copyName').value.trim();
+  const err = document.getElementById('copyErr');
+  if(!newTemplateName){ err.textContent = 'Name is required.'; err.style.display = 'block'; return; }
+  try{
+    await window.Api.post('/project-templates/'+copySourceId+'/copy', { newTemplateName });
+    closeModal('copyModal');
+    await loadTemplates();
+  }catch(e){ err.textContent = e.message || 'Could not copy.'; err.style.display = 'block'; }
+}
+
+async function viewLevels(id){
+  editingTemplateId = id;
+  const t = templates.find(x=>x.id===id);
+  const full = await window.Api.get('/project-templates/'+id);
+  editableLevels = (full.levels||[]).map(l=>({ levelCode: l.level_code, displayName: l.display_name, parentLevelCode: l.parent_level_code, sortOrder: l.sort_order }));
+  document.getElementById('levelsModalTitle').textContent = t.template_name + ' — Hierarchy Levels';
+  document.getElementById('levelsReadOnlyNote').style.display = t.is_standard ? 'block' : 'none';
+  document.getElementById('levelsEditArea').style.display = t.is_standard ? 'none' : 'block';
+  document.getElementById('levelsSaveBtn').style.display = t.is_standard ? 'none' : 'inline-block';
+  renderLevelsTable(!t.is_standard);
+  document.getElementById('levelsModal').classList.add('active');
+}
+
+function renderLevelsTable(editable){
+  const body = document.getElementById('levelsBody');
+  body.innerHTML = editableLevels.map((l,idx) => editable ? `<tr>
+      <td><input type="text" value="${escapeHtml(l.levelCode)}" onchange="editableLevels[${idx}].levelCode=this.value"></td>
+      <td><input type="text" value="${escapeHtml(l.displayName)}" onchange="editableLevels[${idx}].displayName=this.value"></td>
+      <td><input type="text" value="${l.parentLevelCode?escapeHtml(l.parentLevelCode):''}" placeholder="(none — under Project)" onchange="editableLevels[${idx}].parentLevelCode=this.value||null"></td>
+      <td><input type="number" value="${l.sortOrder}" style="width:60px;" onchange="editableLevels[${idx}].sortOrder=Number(this.value)||0"></td>
+    </tr>` : `<tr>
+      <td>${escapeHtml(l.levelCode)}</td><td>${escapeHtml(l.displayName)}</td>
+      <td>${l.parentLevelCode?escapeHtml(l.parentLevelCode):'(none — under Project)'}</td><td>${l.sortOrder}</td>
+    </tr>`).join('');
+}
+function addLevelRow(){
+  editableLevels.push({ levelCode:'', displayName:'', parentLevelCode:null, sortOrder: editableLevels.length+1 });
+  renderLevelsTable(true);
+}
+async function saveLevels(){
+  const err = document.getElementById('levelsErr');
+  try{
+    await window.Api.patch('/project-templates/'+editingTemplateId+'/levels', { levels: editableLevels });
+    closeModal('levelsModal');
+    await loadTemplates();
+  }catch(e){ err.textContent = e.message || 'Could not save.'; err.style.display = 'block'; }
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

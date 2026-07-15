@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.dash-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.dash-header h2{margin:0;}
+
+/* FIX: "every card in a row should be total width / 6" — 6 real KPIs
+   (Total Revenue, Pending Invoices, Cash in Hand, Total Customers,
+   Pending Customer Requests, Unmapped Bank Transactions) fill exactly
+   one row of 6 equal columns. */
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px;}
+.kpi-card{background:var(--card-color,#fff);backdrop-filter:blur(var(--card-blur,16px));-webkit-backdrop-filter:blur(var(--card-blur,16px));border:1px solid var(--card-border,#eee);border-radius:10px;padding:16px 14px;position:relative;}
+.kpi-card .kpi-remove{position:absolute;top:8px;right:10px;font-size:13px;color:#c9ccd4;cursor:pointer;display:none;}
+.kpi-grid.edit-mode .kpi-remove{display:block;}
+.kpi-header{display:flex;align-items:center;gap:8px;}
+.kpi-icon{font-size:16px;color:var(--primary-color,#1f6bff);flex-shrink:0;}
+.kpi-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--kpi-title-color,#8a93a6);font-weight:700;}
+.kpi-value{font-size:24px;font-weight:800;margin-top:8px;color:var(--kpi-content-color,var(--heading-color,#1a2233));}
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:700px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+
+.dash-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:18px;}
+@media(max-width:1100px){.dash-row-3{grid-template-columns:1fr;}}
+
+.dash-section{background:var(--card-color,#fff);backdrop-filter:blur(var(--card-blur,16px));-webkit-backdrop-filter:blur(var(--card-blur,16px));border:1px solid var(--card-border,#eee);border-radius:10px;padding:18px 20px;margin-bottom:18px;}
+.dash-section h3{margin:0 0 12px;font-size:14px;color:var(--heading-color,#1a2233);display:flex;justify-content:space-between;align-items:center;}
+.dash-section h3 a{font-size:12px;font-weight:600;color:var(--primary-color,#1f6bff);text-decoration:none;}
+
+.list-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f2f6;font-size:13px;}
+.list-row:last-child{border-bottom:none;}
+.empty-note{color:#aaa;font-size:13px;padding:12px 0;}
+
+/* Quick Actions — the customizable, add/remove-capable "Shortcuts" */
+.shortcut-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+@media(max-width:1200px){.shortcut-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:700px){.shortcut-grid{grid-template-columns:repeat(2,1fr);}}
+.shortcut-btn{position:relative;padding:16px 10px;border-radius:10px;background:rgba(0,0,0,0.02);border:1px solid var(--card-border,#e2e6ee);text-align:center;text-decoration:none;cursor:pointer;transition:background .15s;}
+.shortcut-btn:hover{background:var(--secondary-color,#eef3ff);border-color:var(--primary-color,#1f6bff);}
+.shortcut-btn i{font-size:20px;color:var(--primary-color,#1f6bff);display:block;margin-bottom:8px;}
+.shortcut-btn span{font-size:12px;font-weight:600;color:var(--text-color,#334);}
+.shortcut-remove{position:absolute;top:4px;right:6px;font-size:12px;color:#c9ccd4;cursor:pointer;display:none;}
+.shortcut-grid.edit-mode .shortcut-remove{display:block;}
+.add-shortcut-btn{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1.5px dashed var(--card-border,#ccc);border-radius:10px;padding:16px 10px;cursor:pointer;color:#999;font-size:12px;font-weight:600;}
+.add-shortcut-btn:hover{border-color:var(--primary-color,#1f6bff);color:var(--primary-color,#1f6bff);}
+.add-card-picker{position:relative;display:inline-block;}
+.add-card-menu{display:none;position:absolute;top:100%;right:0;background:var(--card-color,#fff);backdrop-filter:blur(16px);border:1px solid var(--card-border,#e2e6ee);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.12);z-index:40;min-width:220px;max-height:320px;overflow-y:auto;}
+.add-card-menu.open{display:block;}
+.add-card-menu div{padding:9px 14px;font-size:13px;cursor:pointer;}
+.add-card-menu div:hover{background:rgba(0,0,0,0.04);}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="dash-header">
+    <h2>Dashboard</h2>
+    <div style="display:flex;gap:8px;">
+      <div class="add-card-picker">
+        <button class="btn-secondary" id="addCardBtn">＋ Add KPI</button>
+        <div class="add-card-menu" id="addCardMenu"></div>
+      </div>
+      <button class="btn-secondary" id="editModeBtn">Customize</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="dash-row-3">
+    <div class="dash-section">
+      <h3>Today's Activities <a href="/activity-log.html" target="_top">View All</a></h3>
+      <div id="activitiesList"><div class="empty-note">Loading…</div></div>
+    </div>
+    <div class="dash-section">
+      <h3>Unmapped Transactions <a href="/bank-transactions.html" target="_top">View All</a></h3>
+      <div id="recentTxnList"><div class="empty-note">Loading…</div></div>
+    </div>
+    <div class="dash-section">
+      <h3>Customer Requests <a href="/customer-requests.html" target="_top">View All</a></h3>
+      <div id="customerRequestsList"><div class="empty-note">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="dash-section">
+    <h3>Quick Actions</h3>
+    <div class="shortcut-grid" id="shortcutGrid"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+ * DASHBOARD — every figure here reads from a real, existing
+ * endpoint. Card visibility/order and Quick Actions shortcuts are
+ * saved per-browser in localStorage (no backend table for personal
+ * dashboard layout exists yet — a real, working preference store,
+ * just not synced across devices).
+ *
+ * Deliberately NOT included: an "Upcoming Tasks" section. The
+ * reference layout had one, but this app has no real task/deadline
+ * tracking system behind it (project_tasks is project-specific, not
+ * general reminders) — inventing fake task data would violate the
+ * same real-data-only principle everything else here follows.
+ * ============================================================ */
+
+const ALL_CARDS = {
+  revenue:      { label:'Total Revenue',   icon:'fa-sack-dollar',       fetch: async () => '₹'+fmt((await window.Api.get('/dashboard/summary')).total_revenue) },
+  pending_inv:  { label:'Pending Invoices', icon:'fa-file-invoice',     fetch: async () => (await window.Api.get('/dashboard/summary')).pending_invoices },
+  cash_hand:    { label:'Cash in Hand',     icon:'fa-building-columns', fetch: async () => '₹'+fmt((await window.Api.get('/bank-accounts/net-position')).total_net) },
+  customers:    { label:'Total Customers',  icon:'fa-users',            fetch: async () => (await window.Api.get('/dashboard/summary')).total_customers },
+  cust_reqs:    { label:'Pending Requests', icon:'fa-envelope',         fetch: async () => (await window.Api.get('/customer-requests/pending-count')).count },
+  unmapped_txn: { label:'Unmapped Txns',    icon:'fa-triangle-exclamation', fetch: async () => (await window.Api.get('/bank-accounts/unmapped-count')).count },
+  receivables:  { label:'Receivables',      icon:'fa-hand-holding-dollar', fetch: async () => '₹'+fmt((await window.Api.get('/reports/customer-outstanding')).reduce((s,r)=>s+Number(r.outstanding||0),0)) },
+  payables:     { label:'Payables',         icon:'fa-file-invoice-dollar', fetch: async () => '₹'+fmt((await window.Api.get('/reports/vendor-outstanding')).reduce((s,r)=>s+Number(r.outstanding||0),0)) },
+};
+const DEFAULT_VISIBLE = ['revenue','pending_inv','cash_hand','customers','cust_reqs','unmapped_txn'];
+
+const ALL_SHORTCUTS = {
+  new_invoice:  { label:'New Invoice',   icon:'fa-file-invoice',     href:'/invoices-create.html' },
+  customers:    { label:'Customers',     icon:'fa-user',             href:'/customers.html' },
+  vendors:      { label:'Vendors',       icon:'fa-industry',         href:'/vendors.html' },
+  journal:      { label:'Journal Entry', icon:'fa-book',             href:'/journal-entries.html' },
+  bank:         { label:'Bank & Cash',   icon:'fa-building-columns', href:'/bank-transactions.html' },
+  inventory:    { label:'Inventory',     icon:'fa-box',              href:'/inventory.html' },
+  payments:     { label:'Payments',      icon:'fa-money-bill-transfer', href:'/payments.html' },
+  receipts:     { label:'Receipts',      icon:'fa-money-bill',       href:'/receipts.html' },
+  reports:      { label:'Reports',       icon:'fa-chart-line',       href:'/pl-report.html' },
+};
+const DEFAULT_SHORTCUTS = ['new_invoice','customers','vendors','journal','bank','inventory'];
+
+function fmt(n){ return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0}); }
+
+/* ---- KPI cards (add/remove already worked before this redesign;
+   preserved, just restyled and given 2 more real cards) ---- */
+function getVisibleCards(){
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('dashboardCards')) || DEFAULT_VISIBLE; }
+  catch(e){ saved = DEFAULT_VISIBLE; }
+  return saved.filter(k => ALL_CARDS[k]);
+}
+function setVisibleCards(list){ localStorage.setItem('dashboardCards', JSON.stringify(list)); }
+let editMode = false;
+
+async function renderKpis(){
+  const grid = document.getElementById('kpiGrid');
+  const visible = getVisibleCards();
+  grid.classList.toggle('edit-mode', editMode);
+  grid.innerHTML = visible.map(key => `
+    <div class="kpi-card" data-key="${key}">
+      <span class="kpi-remove" onclick="removeCard('${key}')">✕</span>
+      <div class="kpi-header">
+        <div class="kpi-icon"><i class="fa-solid ${ALL_CARDS[key].icon}"></i></div>
+        <div class="kpi-label">${ALL_CARDS[key].label}</div>
+      </div>
+      <div class="kpi-value" id="kpi-${key}">…</div>
+    </div>`).join('');
+  visible.forEach(async key => {
+    try {
+      const val = await ALL_CARDS[key].fetch();
+      const el = document.getElementById('kpi-'+key);
+      if (el) el.textContent = val;
+    } catch(e) {
+      const el = document.getElementById('kpi-'+key);
+      if (el) el.textContent = '—';
+    }
+  });
+}
+function removeCard(key){ setVisibleCards(getVisibleCards().filter(k=>k!==key)); renderKpis(); }
+function renderAddMenu(){
+  const menu = document.getElementById('addCardMenu');
+  const visible = getVisibleCards();
+  const hidden = Object.keys(ALL_CARDS).filter(k=>!visible.includes(k));
+  menu.innerHTML = hidden.length
+    ? hidden.map(k=>`<div onclick="addCard('${k}')">＋ ${ALL_CARDS[k].label}</div>`).join('')
+    : '<div style="color:#aaa;cursor:default;">All cards already shown</div>';
+}
+function addCard(key){
+  const visible = getVisibleCards();
+  if (!visible.includes(key)) { visible.push(key); setVisibleCards(visible); }
+  document.getElementById('addCardMenu').classList.remove('open');
+  renderKpis();
+}
+document.getElementById('editModeBtn').addEventListener('click', function(){
+  editMode = !editMode;
+  this.textContent = editMode ? 'Done' : 'Customize';
+  renderKpis();
+  renderShortcuts();
+});
+document.getElementById('addCardBtn').addEventListener('click', function(e){
+  e.stopPropagation();
+  renderAddMenu();
+  document.getElementById('addCardMenu').classList.toggle('open');
+});
+document.addEventListener('click', function(e){
+  if (!e.target.closest('.add-card-picker')) document.getElementById('addCardMenu').classList.remove('open');
+});
+
+/* ---- Quick Actions / Shortcuts — FIX: this used to be a hardcoded,
+   permanent list with no way to add or remove entries at all. Now
+   uses the same add/remove pattern already proven for KPI cards. ---- */
+function getVisibleShortcuts(){
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('dashboardShortcuts')) || DEFAULT_SHORTCUTS; }
+  catch(e){ saved = DEFAULT_SHORTCUTS; }
+  return saved.filter(k => ALL_SHORTCUTS[k]);
+}
+function setVisibleShortcuts(list){ localStorage.setItem('dashboardShortcuts', JSON.stringify(list)); }
+
+function renderShortcuts(){
+  const grid = document.getElementById('shortcutGrid');
+  const visible = getVisibleShortcuts();
+  grid.classList.toggle('edit-mode', editMode);
+  let html = visible.map(key => `
+    <a class="shortcut-btn" href="${ALL_SHORTCUTS[key].href}" target="_top">
+      <span class="shortcut-remove" onclick="event.preventDefault();removeShortcut('${key}')">✕</span>
+      <i class="fa-solid ${ALL_SHORTCUTS[key].icon}"></i>
+      <span>${ALL_SHORTCUTS[key].label}</span>
+    </a>`).join('');
+  if (editMode) {
+    html += `<div class="add-shortcut-btn" id="addShortcutBtn" onclick="event.stopPropagation();toggleShortcutMenu()">
+      <i class="fa-solid fa-plus"></i><span>Add Shortcut</span>
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+function removeShortcut(key){ setVisibleShortcuts(getVisibleShortcuts().filter(k=>k!==key)); renderShortcuts(); }
+function toggleShortcutMenu(){
+  const hidden = Object.keys(ALL_SHORTCUTS).filter(k=>!getVisibleShortcuts().includes(k));
+  if (!hidden.length) { alert('All available shortcuts are already shown.'); return; }
+  const choice = prompt('Type the number to add:\n' + hidden.map((k,i)=>`${i+1}. ${ALL_SHORTCUTS[k].label}`).join('\n'));
+  const idx = Number(choice) - 1;
+  if (hidden[idx]) {
+    const visible = getVisibleShortcuts();
+    visible.push(hidden[idx]);
+    setVisibleShortcuts(visible);
+    renderShortcuts();
+  }
+}
+
+async function renderActivities(){
+  const box = document.getElementById('activitiesList');
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const rows = (await window.Api.get('/audit-log?fromDate='+today+'&toDate='+today)).slice(0,6);
+    box.innerHTML = rows.length
+      ? rows.map(r=>`<div class="list-row"><span>${r.module} — ${r.action}</span><span>${new Date(r.performed_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')
+      : '<div class="empty-note">No activity yet today.</div>';
+  } catch(e) {
+    box.innerHTML = '<div class="empty-note">Could not load activity.</div>';
+  }
+}
+
+async function renderUnmappedTransactions(){
+  const box = document.getElementById('recentTxnList');
+  try {
+    const rows = await window.Api.get('/bank-accounts/unmapped-recent');
+    box.innerHTML = rows.length
+      ? rows.map(r=>`<div class="list-row"><span>${escapeHtml(r.description)||'—'} (${escapeHtml(r.account_name)})</span><span>₹${fmt(Number(r.debit)||Number(r.credit)||0)}</span></div>`).join('')
+      : '<div class="empty-note">Nothing unmapped — all caught up.</div>';
+  } catch(e) {
+    box.innerHTML = '<div class="empty-note">Could not load unmapped transactions.</div>';
+  }
+}
+
+async function renderCustomerRequests(){
+  const box = document.getElementById('customerRequestsList');
+  try {
+    const rows = (await window.Api.get('/customer-requests')).filter(r=>r.status==='Open').slice(0,6);
+    box.innerHTML = rows.length
+      ? rows.map(r=>`<div class="list-row"><span>${escapeHtml(r.customer_name)} — ${r.request_type||'Request'}</span><span>${new Date(r.created_at).toLocaleDateString('en-IN')}</span></div>`).join('')
+      : '<div class="empty-note">No open customer requests.</div>';
+  } catch(e) {
+    box.innerHTML = '<div class="empty-note">Could not load customer requests.</div>';
+  }
+}
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+  renderKpis();
+  renderShortcuts();
+  renderActivities();
+  renderUnmappedTransactions();
+  renderCustomerRequests();
+});
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

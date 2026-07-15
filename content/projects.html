@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Projects</title>
+    <!--
+      FIX (found during production-readiness re-audit): this page read/
+      wrote the `projects` table directly via Supabase -- select,
+      insert, update, AND delete -- completely bypassing the real,
+      tested Project Management backend API (requirePermission gates,
+      audit logging, business-rule validation). pm-projects.html
+      already correctly implements project management through that
+      real API. Two independent, unsynchronized ways to write the same
+      table -- one with no permission check or audit trail at all --
+      is a genuine security and data-integrity risk: anyone who
+      reached this exact URL directly (never linked from the sidebar,
+      but nothing prevented navigating to it) could create, edit, or
+      delete projects with none of the real system's safeguards
+      applied.
+
+      This file loads inside the shell's content iframe (root
+      projects.html sets window.__RUDDHAA_CONTENT_PAGE__ = 'projects.html'
+      and shell.js points the iframe at this file) -- unlike
+      bs-report.html, which is a standalone top-level page. A plain
+      window.location.replace() here would only redirect this iframe,
+      loading pm-projects.html's own full shell (sidebar + its own
+      iframe) nested inside THIS shell's chrome. Redirecting the TOP
+      window instead gives a clean, single-shell navigation to the
+      real page, matching what actually clicking "Projects" in the
+      sidebar produces.
+    -->
+    <script>
+      (window.top || window).location.replace('/pm-projects.html');
+    </script>
+</head>
+<body>
+    <p>Redirecting to <a href="/pm-projects.html" target="_top">Projects</a>…</p>
+</body>
+</html>

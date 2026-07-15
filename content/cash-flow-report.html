@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cash Flow Report</title>
+<script>
+            (function () {
+                try {
+                    const cached = localStorage.getItem("portalTheme");
+                    if (cached) {
+                        const t = JSON.parse(cached);
+                        if (t.primary_color)
+                            document.documentElement.style.setProperty(
+                                "--primary-color",
+                                t.primary_color,
+                            );
+                        if (t.secondary_color)
+                            document.documentElement.style.setProperty(
+                                "--secondary-color",
+                                t.secondary_color,
+                            );
+                        if (t.background_color)
+                            document.documentElement.style.setProperty(
+                                "--background-color",
+                                t.background_color,
+                            );
+                        if (t.font_family)
+                            document.documentElement.style.setProperty(
+                                "--font-family",
+                                t.font_family,
+                            );
+                    }
+                } catch (e) {}
+            })();
+        </script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+</style>
+</head>
+<body>
+
+
+            <main class="main">
+                <div class="content-box">
+                    <h1 class="page-title">Cash Flow Report</h1>
+                    <p class="page-subtitle">Net movement across your bank and cash accounts for a period</p>
+                </div>
+
+                <div class="content-box">
+                    <div class="filter-bar">
+                        <label style="font-size:12px;color:#7b8bab;">From<br><input type="date" id="cfFrom"></label>
+                        <label style="font-size:12px;color:#7b8bab;">To<br><input type="date" id="cfTo"></label>
+                        <button class="btn-primary" style="align-self:flex-end;" onclick="loadCashFlow()">Generate</button>
+                    </div>
+                    <div id="cashFlowArea"><div class="empty-state"><p class="empty-state-message">Select a date range and click Generate.</p></div></div>
+                </div>
+            </main>
+        </div>
+
+        
+<script>
+            function toggleGroup(el) {
+                const sub = el.nextElementSibling;
+                if (sub && sub.classList.contains("nav-sub")) {
+                    sub.classList.toggle("open");
+                    el.querySelector(".nav-arrow").style.transform = sub.classList.contains("open")
+                        ? "rotate(180deg)"
+                        : "none";
+                }
+            }
+
+            function closeSidebar() {
+                document.getElementById("sidebar").classList.remove("open");
+                document.getElementById("sidebarOverlay").classList.remove("open");
+            }
+
+            function logout() {
+                localStorage.removeItem("rc_token");
+                localStorage.removeItem("rc_user");
+                localStorage.removeItem("loggedEmployee");
+                localStorage.removeItem("authToken");
+                localStorage.removeItem("userData");
+                window.location.href = "business-login.html";
+            }
+
+            function fmt(n) { return parseFloat(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+            // ============================================================
+            // Cash Flow Report — this page previously had zero real
+            // implementation (copy-pasted salary.html stub, never
+            // updated: title/labels/table ids all said "Salary
+            // Management"). Rebuilt as a Net Cash & Bank Movement
+            // report using the same journal_entries + journal_entry_lines
+            // join already proven in balance-sheet.html and
+            // general-ledger.html, matched against bank_accounts via
+            // ledger_account_code (the same linkage bank-transactions.html
+            // already relies on for posting bank transactions to the GL).
+            //
+            // Deliberately NOT a classic Operating/Investing/Financing
+            // categorized statement — chart_of_accounts has no field
+            // classifying accounts into those buckets anywhere in this
+            // codebase, and inventing that categorization would mean
+            // fabricating a business rule that doesn't exist. This shows
+            // the real, verifiable number instead: net change in cash
+            // and bank balances for the period, broken down by account.
+            // ============================================================
+            async function loadCashFlow() {
+                const area = document.getElementById('cashFlowArea');
+                const from = document.getElementById('cfFrom').value;
+                const to = document.getElementById('cfTo').value;
+                if (!from || !to) { alert('Select both a From and To date.'); return; }
+                area.innerHTML = '<div class="empty-state"><p class="empty-state-message">Generating…</p></div>';
+                try {
+                    const { data: accounts, error: acctErr } = await window.db
+                        .from('bank_accounts').select('*');
+                    if (acctErr) throw acctErr;
+                    const bankAccounts = (accounts || []).filter(a => a.coa_id);
+                    if (!bankAccounts.length) {
+                        area.innerHTML = '<div class="empty-state"><p class="empty-state-message">No bank/cash accounts with a linked ledger account found. Add one from Bank &amp; Cash Accounts first.</p></div>';
+                        return;
+                    }
+
+                    const { data: entries, error: jeErr } = await window.db
+                        .from('journal_entries').select('*')
+                        .eq('status', 'posted')
+                        .gte('date', from)
+                        .lte('date', to);
+                    if (jeErr) throw jeErr;
+                    const journalIds = (entries || []).map(e => e.id);
+                    const { data: lines, error: lineErr } = journalIds.length
+                        ? await window.db.from('journal_entry_lines').select('*').in('je_id', journalIds)
+                        : { data: [], error: null };
+                    if (lineErr) throw lineErr;
+
+                    let totalIn = 0, totalOut = 0;
+                    const rows = bankAccounts.map(acc => {
+                        const acctLines = (lines || []).filter(l => l.account_id === acc.coa_id);
+                        const debit = acctLines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+                        const credit = acctLines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+                        const net = debit - credit;
+                        totalIn += debit; totalOut += credit;
+                        return { name: acc.account_name, debit, credit, net };
+                    });
+
+                    area.innerHTML = `<div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);overflow:hidden;margin-bottom:20px;padding:16px;">
+                        <table class="data-table" style="width:100%;">
+                            <thead><tr><th>Account</th><th>Cash In</th><th>Cash Out</th><th>Net Movement</th></tr></thead>
+                            <tbody>${rows.map(r => `<tr>
+                                <td>${escapeHtml(r.name)}</td>
+                                <td style="color:#1a8843;font-weight:700;">₹${fmt(r.debit)}</td>
+                                <td style="color:#c0392b;font-weight:700;">₹${fmt(r.credit)}</td>
+                                <td style="color:${r.net >= 0 ? '#1a8843' : '#c0392b'};font-weight:700;">₹${fmt(Math.abs(r.net))} ${r.net >= 0 ? '' : '(net outflow)'}</td>
+                            </tr>`).join('')}</tbody>
+                            <tfoot><tr style="font-weight:800;border-top:2px solid #e0e0e0;">
+                                <td>Total</td><td style="color:#1a8843;">₹${fmt(totalIn)}</td><td style="color:#c0392b;">₹${fmt(totalOut)}</td>
+                                <td style="color:${totalIn - totalOut >= 0 ? '#1a8843' : '#c0392b'};">₹${fmt(Math.abs(totalIn - totalOut))} ${totalIn - totalOut >= 0 ? 'net inflow' : 'net outflow'}</td>
+                            </tr></tfoot>
+                        </table>
+                    </div>`;
+                } catch (e) {
+                    console.error('Could not load cash flow report:', e);
+                    area.innerHTML = '<div class="empty-state"><p class="empty-state-message">Could not generate the cash flow report.</p></div>';
+                }
+            }
+
+            // Load theme and company info
+            async function initPage() {
+                try {
+                    // Check session
+                    const sessionData = localStorage.getItem("loggedEmployee");
+                    
+                    if (!sessionData) {
+                        console.log("Redirecting to login...");
+                        window.location.href = "business-login.html";
+                        return;
+                    }
+
+                    const userData = JSON.parse(sessionData);
+                    
+                    if (!userData || !userData.employee_id) {
+                        console.error("❌ Invalid session data");
+                        window.location.href = "business-login.html";
+                        return;
+                    }
+                    (function(){var el=document.getElementById("employeeName");if(el)el.textContent=userData.employeeName || userData.username || "—";})();
+                    (function(){var el=document.getElementById("employeeMeta");if(el)el.textContent=userData.department || "—";})();
+
+                    // Load company logo
+                    if (userData.companyLogo) {
+                        document.getElementById("companyLogo").src = userData.companyLogo;
+                    }
+
+                    const today = new Date().toISOString().split('T')[0];
+                    const first = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+                    document.getElementById('cfFrom').value = first;
+                    document.getElementById('cfTo').value = today;
+                    loadCashFlow();
+                } catch (e) {
+                    console.error("❌ Init error:", e);
+                    window.location.href = "business-login.html";
+                }
+            }
+
+            (function(){var el=document.getElementById("sidebarToggle");if(el)el.addEventListener("click", () => {
+                const sidebar = document.getElementById("sidebar");
+                const overlay = document.getElementById("sidebarOverlay");
+                sidebar.classList.toggle("open");
+                overlay.classList.toggle("open");
+            });})();
+
+            initPage();
+        </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/validation.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR Reports</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>HR Reports</h2>
+  </div>
+  <!--
+    NOTE: New page — pulls from the Attendance and Leave reporting
+    APIs (/api/attendance/reports/*, /api/leave/reports/*). Payroll's
+    own register report already lives on the Salary page (selecting a
+    payroll run there shows its register), so it isn't duplicated here.
+  -->
+  <div class="filter-bar">
+    <select id="reportType" onchange="onReportTypeChange()">
+      <option value="leave-register">Leave Register</option>
+      <option value="attendance-summary">Attendance Summary (per employee)</option>
+    </select>
+    <input type="date" id="dateFrom">
+    <input type="date" id="dateTo">
+    <select id="employeeSelect" style="display:none;"><option value="">Select employee…</option></select>
+    <button class="btn-primary" onclick="runReport()">Run Report</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead id="reportHead"><tr><th colspan="5" class="empty-state">Choose a report and date range, then click "Run Report".</th></tr></thead>
+      <tbody id="reportBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let employees = [];
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    const today = new Date();
+    const monthAgo = new Date(today.getFullYear(), today.getMonth()-1, today.getDate());
+    document.getElementById('dateFrom').value = monthAgo.toISOString().slice(0,10);
+    document.getElementById('dateTo').value = today.toISOString().slice(0,10);
+    loadEmployeePicker();
+    onReportTypeChange();
+});
+
+async function loadEmployeePicker(){
+    try {
+        const result = await window.Api.get('/hr/employees?pageSize=200');
+        employees = result.rows || [];
+        document.getElementById('employeeSelect').innerHTML = '<option value="">Select employee…</option>' +
+            employees.map(e=>`<option value="${e.employee_id}">${e.employee_code} — ${escapeHtml(e.employee_name)}</option>`).join('');
+    } catch(e) {
+        console.warn('Could not load employee picker:', e.message);
+    }
+}
+function onReportTypeChange(){
+    const type = document.getElementById('reportType').value;
+    document.getElementById('employeeSelect').style.display = (type === 'attendance-summary') ? 'inline-block' : 'none';
+}
+async function runReport(){
+    const type = document.getElementById('reportType').value;
+    const dateFrom = document.getElementById('dateFrom').value;
+    const dateTo = document.getElementById('dateTo').value;
+    const head = document.getElementById('reportHead');
+    const body = document.getElementById('reportBody');
+    body.innerHTML = '<tr><td colspan="5" class="empty-state">Loading…</td></tr>';
+
+    try {
+        if(type === 'leave-register'){
+            head.innerHTML = '<tr><th>#</th><th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Status</th></tr>';
+            const rows = await window.Api.get('/leave/reports/register?dateFrom='+dateFrom+'&dateTo='+dateTo);
+            if(!rows.length){ body.innerHTML = '<tr><td colspan="6" class="empty-state">No leave records in this range.</td></tr>'; return; }
+            body.innerHTML = rows.map((r,i)=>`<tr>
+                <td>${i+1}</td><td>${escapeHtml(r.employee_name)||'—'}</td><td>${escapeHtml(r.leave_type_name)||'—'}</td>
+                <td>${r.from_date?String(r.from_date).split('T')[0]:'—'}</td>
+                <td>${r.to_date?String(r.to_date).split('T')[0]:'—'}</td>
+                <td><span class="badge ${r.status==='approved'?'active':'inactive'}">${r.status||'—'}</span></td>
+            </tr>`).join('');
+        } else {
+            const employeeId = document.getElementById('employeeSelect').value;
+            if(!employeeId){ body.innerHTML = '<tr><td colspan="5" class="empty-state">Select an employee first.</td></tr>'; return; }
+            head.innerHTML = '<tr><th>Metric</th><th>Value</th></tr>';
+            const result = await window.Api.get('/attendance/reports/summary?employeeId='+employeeId+'&dateFrom='+dateFrom+'&dateTo='+dateTo);
+            const entries = Object.entries(result || {});
+            if(!entries.length){ body.innerHTML = '<tr><td colspan="2" class="empty-state">No data for this range.</td></tr>'; return; }
+            body.innerHTML = entries.map(([k,v])=>`<tr><td>${k}</td><td>${typeof v==='object'?JSON.stringify(v):v}</td></tr>`).join('');
+        }
+    } catch(e) {
+        body.innerHTML = '<tr><td colspan="6" class="empty-state">Could not load report: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

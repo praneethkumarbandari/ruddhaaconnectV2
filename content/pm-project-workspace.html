@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Workspace</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+.pm-tabs { display:flex; flex-wrap:wrap; gap:4px; border-bottom:2px solid #eee; margin-bottom:16px; }
+.pm-tab { padding:10px 14px; cursor:pointer; font-size:13px; font-weight:600; color:#888; border-bottom:2px solid transparent; margin-bottom:-2px; }
+.pm-tab.active { color:var(--primary-color,#3b5bfd); border-bottom-color:var(--primary-color,#3b5bfd); }
+.pm-panel { display:none; }
+.pm-panel.active { display:block; }
+.pm-section { background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px)); border-radius:10px; padding:16px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
+.pm-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:13px; }
+.pm-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width:800px) { .pm-two-col { grid-template-columns:1fr; } }
+.pm-note-card { border-bottom:1px solid #f0f0f0; padding:10px 0; font-size:13px; }
+.pm-note-meta { color:#999; font-size:11px; margin-top:4px; }
+</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2 id="projectTitle">Loading…</h2>
+        <div>
+          <select id="statusSelect" onchange="changeStatus()" style="padding:6px;margin-right:8px;">
+            <option value="">Change status…</option>
+          </select>
+          <span class="back-link" onclick="window.parent.location.href='pm-projects.html'">← Back to Projects</span>
+        </div>
+    </div>
+
+    <div class="pm-tabs" id="tabBar">
+        <div class="pm-tab active" data-tab="overview">Overview</div>
+        <div class="pm-tab" data-tab="financial">Financial Summary</div>
+        <div class="pm-tab" data-tab="budget">Budget</div>
+        <div class="pm-tab" data-tab="tasks">Tasks</div>
+        <div class="pm-tab" data-tab="milestones">Milestones</div>
+        <div class="pm-tab" data-tab="team">Team</div>
+        <div class="pm-tab" data-tab="documents">Documents</div>
+        <div class="pm-tab" data-tab="notes">Notes</div>
+        <div class="pm-tab" data-tab="activity">Activity Log</div>
+        <div class="pm-tab" data-tab="timeline">Timeline</div>
+    </div>
+
+    <div class="pm-panel active" id="panel-overview">
+        <div class="pm-section" id="overviewBody">Loading…</div>
+    </div>
+
+    <div class="pm-panel" id="panel-financial">
+        <div class="pm-two-col">
+            <div class="pm-section"><h3>Revenue</h3><div id="revenueBody">Loading…</div></div>
+            <div class="pm-section"><h3>Cost</h3><div id="costBody">Loading…</div></div>
+        </div>
+        <div class="pm-two-col">
+            <div class="pm-section"><h3>Profitability</h3><div id="profitBody">Loading…</div></div>
+            <div class="pm-section"><h3>Cash Flow &amp; Outstanding</h3><div id="cashOutstandingBody">Loading…</div></div>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-budget">
+        <div class="pm-section">
+            <div class="page-header" style="margin-bottom:10px;"><h3 style="margin:0;">Budget Versions</h3><button class="btn-secondary" onclick="createBudgetVersion()">＋ New Version</button></div>
+            <div id="budgetVersionsBody">Loading…</div>
+        </div>
+        <div class="pm-section" id="budgetVsActualSection" style="display:none;">
+            <h3>Budget vs Actual (Approved Version)</h3>
+            <div id="budgetVsActualBody"></div>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-tasks">
+        <div class="pm-section">
+            <div class="page-header" style="margin-bottom:10px;">
+                <h3 style="margin:0;">Tasks</h3>
+                <div>
+                    <button class="btn-secondary" id="btnTableView" onclick="setTaskView('table')">Table</button>
+                    <button class="btn-secondary" id="btnKanbanView" onclick="setTaskView('kanban')">Kanban</button>
+                    <button class="btn-primary" onclick="openTaskModal()">＋ New Task</button>
+                </div>
+            </div>
+            <div class="field-row" style="margin-bottom:10px;">
+                <select id="taskFilterAssignee" onchange="renderTasksCurrentView()"><option value="">All Assignees</option></select>
+                <input type="date" id="taskFilterDueDate" onchange="renderTasksCurrentView()">
+                <button class="btn-secondary" onclick="document.getElementById('taskFilterAssignee').value='';document.getElementById('taskFilterDueDate').value='';renderTasksCurrentView();">Clear Filters</button>
+            </div>
+            <div id="tasksTableWrap"><table><thead><tr><th>Task</th><th>Milestone</th><th>Assignee</th><th>Due Date</th><th>Status</th></tr></thead><tbody id="tasksBody"></tbody></table></div>
+            <div id="tasksKanbanWrap" style="display:none;"></div>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-milestones">
+        <div class="pm-section">
+            <div class="page-header" style="margin-bottom:10px;"><h3 style="margin:0;">Milestones</h3><button class="btn-secondary" onclick="openMilestoneModal()">＋ New Milestone</button></div>
+            <table><thead><tr><th>Milestone</th><th>Target Date</th><th>Actual Date</th><th>Status</th></tr></thead><tbody id="milestonesBody"></tbody></table>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-team">
+        <div class="pm-section">
+            <div class="page-header" style="margin-bottom:10px;"><h3 style="margin:0;">Team Members</h3><button class="btn-secondary" onclick="openMemberModal()">＋ Add Member</button></div>
+            <table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Added</th><th></th></tr></thead><tbody id="membersBody"></tbody></table>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-documents">
+        <div class="pm-section">
+            <!-- Metadata only — no file body is ever uploaded to or stored by this backend (see project-documents.ts). storagePath is an external reference (e.g. a link you already have) the caller provides. -->
+            <div class="page-header" style="margin-bottom:10px;"><h3 style="margin:0;">Documents</h3><button class="btn-secondary" onclick="openDocumentModal()">＋ Add Document Reference</button></div>
+            <table><thead><tr><th>File Name</th><th>Storage Location</th><th>Uploaded By</th><th>Date</th><th></th></tr></thead><tbody id="documentsBody"></tbody></table>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-notes">
+        <div class="pm-section">
+            <h3>Notes</h3>
+            <div class="field-row"><textarea id="newNoteText" placeholder="Add a note…" style="flex:1;padding:8px;min-height:60px;"></textarea></div>
+            <button class="btn-primary" onclick="addNote()" style="margin-top:8px;">Add Note</button>
+            <p style="font-size:12px;color:#888;margin-top:6px;">Notes are append-only — there is no edit or delete action, by design.</p>
+            <div id="notesBody" style="margin-top:14px;"></div>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-activity">
+        <div class="pm-section">
+            <h3>Activity Log</h3>
+            <table><thead><tr><th>Action</th><th>By</th><th>When</th><th>Detail</th></tr></thead><tbody id="activityBody"></tbody></table>
+        </div>
+    </div>
+
+    <div class="pm-panel" id="panel-timeline">
+        <div class="pm-section">
+            <div class="field-row">
+                <label>From:</label><input type="date" id="tlFrom">
+                <label>To:</label><input type="date" id="tlTo">
+                <button class="btn-secondary" onclick="loadTimeline()">Generate</button>
+            </div>
+            <table style="margin-top:10px;"><thead><tr><th>Date</th><th>JE No.</th><th>Narration</th><th>Source</th><th>Amount</th></tr></thead><tbody id="timelineBody"></tbody></table>
+        </div>
+    </div>
+  </div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal-overlay" id="taskModal"><div class="modal">
+  <div class="modal-header"><h3>New Task</h3><button class="modal-header-close" onclick="document.getElementById('taskModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+  <div class="modal-body">
+    <div class="field"><label>Task Name *</label><input type="text" id="fTaskName"></div>
+    <div class="field"><label>Milestone</label><select id="fTaskMilestone"><option value="">None</option></select></div>
+    <div class="field"><label>Assignee</label><select id="fTaskAssignee"><option value="">Unassigned</option></select></div>
+    <div class="field"><label>Due Date</label><input type="date" id="fTaskDueDate"></div>
+  </div>
+  <div class="modal-footer"><button class="btn-primary" onclick="saveTask()">Create Task</button></div>
+</div></div>
+
+<!-- Milestone Modal -->
+<div class="modal-overlay" id="milestoneModal"><div class="modal">
+  <div class="modal-header"><h3>New Milestone</h3><button class="modal-header-close" onclick="document.getElementById('milestoneModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+  <div class="modal-body">
+    <div class="field"><label>Milestone Name *</label><input type="text" id="fMilestoneName"></div>
+    <div class="field"><label>Target Date</label><input type="date" id="fMilestoneDate"></div>
+  </div>
+  <div class="modal-footer"><button class="btn-primary" onclick="saveMilestone()">Create Milestone</button></div>
+</div></div>
+
+<!-- Member Modal -->
+<div class="modal-overlay" id="memberModal"><div class="modal">
+  <div class="modal-header"><h3>Add Team Member</h3><button class="modal-header-close" onclick="document.getElementById('memberModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+  <div class="modal-body">
+    <div class="field"><label>Employee</label><select id="fMemberEmployee"></select></div>
+    <div class="field"><label>Role</label><select id="fMemberRole"><option value="manager">Manager</option><option value="member" selected>Member</option><option value="viewer">Viewer</option></select></div>
+  </div>
+  <div class="modal-footer"><button class="btn-primary" onclick="saveMember()">Add Member</button></div>
+</div></div>
+
+<!-- Document Modal -->
+<div class="modal-overlay" id="documentModal"><div class="modal">
+  <div class="modal-header"><h3>Add Document Reference</h3><button class="modal-header-close" onclick="document.getElementById('documentModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+  <div class="modal-body">
+    <div class="field"><label>File Name *</label><input type="text" id="fDocName" placeholder="e.g. site-plan.pdf"></div>
+    <div class="field"><label>Storage Location (URL/path) *</label><input type="text" id="fDocPath" placeholder="e.g. https://drive.google.com/..."></div>
+    <p style="font-size:12px;color:#888;">This backend stores the reference only — upload the file to your own storage first, then paste its link here.</p>
+  </div>
+  <div class="modal-footer"><button class="btn-primary" onclick="saveDocument()">Add Reference</button></div>
+</div></div>
+
+<script>
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fmtDate(d){return d?new Date(d).toLocaleDateString('en-IN'):'—';}
+function fmtDateTime(d){return d?new Date(d).toLocaleString('en-IN'):'—';}
+const PROJECT_ID = new URLSearchParams(window.location.search).get('id');
+let currentProject = null;
+
+const STATUS_TRANSITIONS = { draft:['active'], active:['on_hold','closing'], on_hold:['active'], closing:['closed','active'], closed:[] };
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    if(!PROJECT_ID){ document.getElementById('projectTitle').textContent = 'No project selected'; return; }
+
+    document.querySelectorAll('.pm-tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+
+    await loadOverview();
+});
+
+function switchTab(tabName){
+    document.querySelectorAll('.pm-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    document.querySelectorAll('.pm-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-'+tabName));
+    if(tabName==='financial') loadFinancial();
+    if(tabName==='budget') loadBudget();
+    if(tabName==='tasks') loadTasks();
+    if(tabName==='milestones') loadMilestones();
+    if(tabName==='team') loadTeam();
+    if(tabName==='documents') loadDocuments();
+    if(tabName==='notes') loadNotes();
+    if(tabName==='activity') loadActivity();
+    if(tabName==='timeline'){
+        const today = new Date().toISOString().split('T')[0];
+        if(!document.getElementById('tlFrom').value){
+            document.getElementById('tlFrom').value = today.slice(0,8)+'01';
+            document.getElementById('tlTo').value = today;
+        }
+        loadTimeline();
+    }
+}
+
+async function loadOverview(){
+    try{
+        currentProject = await window.Api.get('/projects/'+PROJECT_ID);
+        document.getElementById('projectTitle').textContent = '📁 '+currentProject.project_code+' — '+currentProject.project_name;
+        const allowed = STATUS_TRANSITIONS[currentProject.status] || [];
+        const sel = document.getElementById('statusSelect');
+        sel.innerHTML = '<option value="">Status: '+currentProject.status.replace('_',' ')+'</option>' + allowed.map(s=>`<option value="${s}">Move to ${s.replace('_',' ')}</option>`).join('');
+        document.getElementById('overviewBody').innerHTML = `
+            <div class="pm-row"><span>Project Code</span><span>${currentProject.project_code}</span></div>
+            <div class="pm-row"><span>Customer</span><span>${currentProject.customer_name||'—'}</span></div>
+            <div class="pm-row"><span>Category</span><span>${currentProject.category_name||'—'}</span></div>
+            <div class="pm-row"><span>Status</span><span><span class="badge ${currentProject.status}">${currentProject.status.replace('_',' ')}</span></span></div>
+            <div class="pm-row"><span>Start Date</span><span>${fmtDate(currentProject.start_date)}</span></div>
+            <div class="pm-row"><span>Target End Date</span><span>${fmtDate(currentProject.target_end_date)}</span></div>
+            <div class="pm-row"><span>Actual End Date</span><span>${fmtDate(currentProject.actual_end_date)}</span></div>
+        `;
+    }catch(e){
+        document.getElementById('overviewBody').innerHTML = 'Could not load project: '+(e.message||'Unknown error');
+    }
+}
+
+async function changeStatus(){
+    const status = document.getElementById('statusSelect').value;
+    if(!status) return;
+    try{
+        await window.Api.post('/projects/'+PROJECT_ID+'/status', { status });
+        await loadOverview();
+    }catch(e){ alert('Could not change status: '+(e.message||'Unknown error')); }
+}
+
+async function loadFinancial(){
+    try{
+        const [revenue, cost, profit, cashflow, outstanding] = await Promise.all([
+            window.Api.get('/projects/'+PROJECT_ID+'/reports/revenue'),
+            window.Api.get('/projects/'+PROJECT_ID+'/reports/cost'),
+            window.Api.get('/projects/'+PROJECT_ID+'/reports/profitability'),
+            window.Api.get('/projects/'+PROJECT_ID+'/reports/cashflow'),
+            window.Api.get('/projects/'+PROJECT_ID+'/reports/outstanding'),
+        ]);
+        document.getElementById('revenueBody').innerHTML = `<div class="pm-row"><span>Gross</span><span>₹${fmt(revenue.grossRevenue)}</span></div><div class="pm-row"><span>Credit Notes</span><span>₹${fmt(revenue.creditNotes)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net</span><span>₹${fmt(revenue.netRevenue)}</span></div>`;
+        document.getElementById('costBody').innerHTML = `<div class="pm-row"><span>Gross</span><span>₹${fmt(cost.grossCost)}</span></div><div class="pm-row"><span>Debit Notes</span><span>₹${fmt(cost.debitNotes)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net</span><span>₹${fmt(cost.netCost)}</span></div>`;
+        document.getElementById('profitBody').innerHTML = `<div class="pm-row"><span>Gross Profit</span><span>₹${fmt(profit.grossProfit)}</span></div><div class="pm-row"><span>Manual Adjustments</span><span>₹${fmt(profit.manualJournalNet)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net Profit</span><span>₹${fmt(profit.netProfit)}</span></div>`;
+        document.getElementById('cashOutstandingBody').innerHTML = `<div class="pm-row"><span>Cash In</span><span>₹${fmt(cashflow.cashIn)}</span></div><div class="pm-row"><span>Cash Out</span><span>₹${fmt(cashflow.cashOut)}</span></div><div class="pm-row"><span>Receivable</span><span>₹${fmt(outstanding.receivable)}</span></div><div class="pm-row"><span>Payable</span><span>₹${fmt(outstanding.payable)}</span></div>`;
+    }catch(e){
+        document.getElementById('revenueBody').innerHTML = 'Could not load: '+(e.message||'Unknown error');
+    }
+}
+
+async function loadBudget(){
+    try{
+        const versions = await window.Api.get('/projects/'+PROJECT_ID+'/budget-versions');
+        document.getElementById('budgetVersionsBody').innerHTML = versions.length ? versions.map(v=>`
+            <div class="pm-row">
+                <span>Version ${v.version_no} — <span class="badge ${v.status}">${v.status}</span></span>
+                <span>
+                    ${v.status==='draft'?`<button class="action-btn" onclick="addBudgetLinePrompt(${v.id})">+ Line</button> <button class="action-btn" onclick="approveBudgetVersion(${v.id})">Approve</button>`:''}
+                    ${v.status==='approved'?`<button class="action-btn" onclick="supersedeBudgetVersion(${v.id})">Supersede</button>`:''}
+                </span>
+            </div>`).join('') : '<p class="empty-state">No budget versions yet.</p>';
+        const approved = versions.find(v=>v.status==='approved');
+        if(approved){
+            const bva = await window.Api.get('/projects/'+PROJECT_ID+'/reports/budget-vs-actual');
+            document.getElementById('budgetVsActualSection').style.display='block';
+            document.getElementById('budgetVsActualBody').innerHTML = `
+                <div class="pm-row"><span>Cost — Budgeted</span><span>₹${fmt(bva.cost.budgeted)}</span></div>
+                <div class="pm-row"><span>Cost — Actual</span><span>₹${fmt(bva.cost.actual)}</span></div>
+                <div class="pm-row" style="font-weight:700;"><span>Cost — Variance</span><span style="color:${bva.cost.variance<0?'#c0392b':'#1a8843'}">₹${fmt(bva.cost.variance)}</span></div>
+                <div class="pm-row"><span>Revenue — Budgeted</span><span>₹${fmt(bva.revenue.budgeted)}</span></div>
+                <div class="pm-row"><span>Revenue — Actual</span><span>₹${fmt(bva.revenue.actual)}</span></div>
+                <div class="pm-row" style="font-weight:700;"><span>Revenue — Variance</span><span style="color:${bva.revenue.variance<0?'#c0392b':'#1a8843'}">₹${fmt(bva.revenue.variance)}</span></div>
+            `;
+        } else {
+            document.getElementById('budgetVsActualSection').style.display='none';
+        }
+    }catch(e){
+        document.getElementById('budgetVersionsBody').innerHTML = 'Could not load: '+(e.message||'Unknown error');
+    }
+}
+async function createBudgetVersion(){
+    try{ await window.Api.post('/projects/'+PROJECT_ID+'/budget-versions'); loadBudget(); }
+    catch(e){ alert('Could not create version: '+(e.message||'Unknown error')); }
+}
+async function addBudgetLinePrompt(versionId){
+    const categoryLabel = prompt('Category label (e.g. "Materials"):');
+    if(!categoryLabel) return;
+    const budgetType = confirm('Click OK for Cost, Cancel for Revenue') ? 'cost' : 'revenue';
+    const amount = parseFloat(prompt('Budgeted amount:'));
+    if(!amount || amount<0) { alert('Invalid amount.'); return; }
+    try{ await window.Api.post('/projects/budget-versions/'+versionId+'/lines', { categoryLabel, budgetType, budgetedAmount: amount }); loadBudget(); }
+    catch(e){ alert('Could not add line: '+(e.message||'Unknown error')); }
+}
+async function approveBudgetVersion(versionId){
+    if(!confirm('Approve this budget version? Only one version may be approved at a time.')) return;
+    try{ await window.Api.post('/projects/budget-versions/'+versionId+'/approve'); loadBudget(); }
+    catch(e){ alert('Could not approve: '+(e.message||'Unknown error')); }
+}
+async function supersedeBudgetVersion(versionId){
+    if(!confirm('Supersede this approved version?')) return;
+    try{ await window.Api.post('/projects/budget-versions/'+versionId+'/supersede'); loadBudget(); }
+    catch(e){ alert('Could not supersede: '+(e.message||'Unknown error')); }
+}
+
+let allTasks = [];
+let taskView = 'table';
+
+async function loadTasks(){
+    try{
+        allTasks = await window.Api.get('/projects/'+PROJECT_ID+'/tasks');
+        const members = await window.Api.get('/projects/'+PROJECT_ID+'/members').catch(()=>[]);
+        const assigneeSel = document.getElementById('taskFilterAssignee');
+        const currentVal = assigneeSel.value;
+        assigneeSel.innerHTML = '<option value="">All Assignees</option>' + members.map(m=>`<option value="${m.employee_id}">${m.employee_name}</option>`).join('');
+        assigneeSel.value = currentVal;
+        renderTasksCurrentView();
+    }catch(e){ document.getElementById('tasksBody').innerHTML = '<tr><td colspan="5" class="empty-state">Error loading tasks.</td></tr>'; }
+}
+
+function filteredTasks(){
+    const assignee = document.getElementById('taskFilterAssignee').value;
+    const dueDate = document.getElementById('taskFilterDueDate').value;
+    return allTasks.filter(t =>
+        (!assignee || String(t.assignee_id) === assignee) &&
+        (!dueDate || t.due_date === dueDate)
+    );
+}
+
+function setTaskView(view){
+    taskView = view;
+    document.getElementById('tasksTableWrap').style.display = view==='table' ? 'block' : 'none';
+    document.getElementById('tasksKanbanWrap').style.display = view==='kanban' ? 'block' : 'none';
+    document.getElementById('btnTableView').classList.toggle('btn-primary', view==='table');
+    document.getElementById('btnKanbanView').classList.toggle('btn-primary', view==='kanban');
+    renderTasksCurrentView();
+}
+
+function renderTasksCurrentView(){
+    const tasks = filteredTasks();
+    if(taskView === 'table'){
+        document.getElementById('tasksBody').innerHTML = tasks.length ? tasks.map(t=>`<tr>
+            <td>${t.task_name}</td><td>${t.milestone_id||'—'}</td><td>${t.assignee_name||'Unassigned'}</td><td>${fmtDate(t.due_date)}</td>
+            <td><select onchange="updateTaskStatus(${t.id}, this.value)">
+                ${['pending','in_progress','done','cancelled'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}
+            </select></td>
+        </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No tasks match the current filters.</td></tr>';
+    } else {
+        const columns = [
+            { key:'pending', label:'To Do' },
+            { key:'in_progress', label:'In Progress' },
+            { key:'done', label:'Completed' },
+            { key:'cancelled', label:'Cancelled' },
+        ];
+        document.getElementById('tasksKanbanWrap').innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+                ${columns.map(col => `
+                    <div class="kanban-col" data-status="${col.key}" ondragover="event.preventDefault()" ondrop="onKanbanDrop(event,'${col.key}')" style="background:#f5f7fb;border-radius:8px;padding:8px;min-height:120px;">
+                        <h4 style="font-size:12px;color:#888;margin:0 0 8px;">${col.label} (${tasks.filter(t=>t.status===col.key).length})</h4>
+                        ${tasks.filter(t=>t.status===col.key).map(t=>`
+                            <div class="kanban-card" draggable="true" ondragstart="event.dataTransfer.setData('taskId','${t.id}')" style="background:#fff;border-radius:6px;padding:8px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);cursor:grab;">
+                                <div style="font-size:13px;font-weight:600;">${t.task_name}</div>
+                                <div style="font-size:11px;color:#888;margin-top:4px;">${t.assignee_name||'Unassigned'} ${t.due_date?'· '+fmtDate(t.due_date):''}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+}
+
+async function onKanbanDrop(event, newStatus){
+    const taskId = event.dataTransfer.getData('taskId');
+    if(!taskId) return;
+    await updateTaskStatus(Number(taskId), newStatus);
+}
+
+async function updateTaskStatus(taskId, status){
+    try{ await window.Api.post('/projects/tasks/'+taskId+'/status', { status }); await loadTasks(); }
+    catch(e){ alert('Could not update: '+(e.message||'Unknown error')); loadTasks(); }
+}
+async function openTaskModal(){
+    document.getElementById('fTaskName').value='';
+    document.getElementById('fTaskDueDate').value='';
+    try{
+        const milestones = await window.Api.get('/projects/'+PROJECT_ID+'/milestones');
+        document.getElementById('fTaskMilestone').innerHTML = '<option value="">None</option>' + milestones.map(m=>`<option value="${m.id}">${m.milestone_name}</option>`).join('');
+    }catch(e){}
+    try{
+        const members = await window.Api.get('/projects/'+PROJECT_ID+'/members');
+        document.getElementById('fTaskAssignee').innerHTML = '<option value="">Unassigned</option>' + members.map(m=>`<option value="${m.employee_id}">${m.employee_name}</option>`).join('');
+    }catch(e){}
+    document.getElementById('taskModal').classList.add('active');
+}
+async function saveTask(){
+    const taskName = document.getElementById('fTaskName').value.trim();
+    if(!taskName){ alert('Task name is required.'); return; }
+    try{
+        await window.Api.post('/projects/'+PROJECT_ID+'/tasks', {
+            taskName,
+            milestoneId: document.getElementById('fTaskMilestone').value || undefined,
+            assigneeId: document.getElementById('fTaskAssignee').value || undefined,
+            dueDate: document.getElementById('fTaskDueDate').value || undefined,
+        });
+        document.getElementById('taskModal').classList.remove('active');
+        loadTasks();
+    }catch(e){ alert('Could not create task: '+(e.message||'Unknown error')); }
+}
+
+async function loadMilestones(){
+    try{
+        const milestones = await window.Api.get('/projects/'+PROJECT_ID+'/milestones');
+        document.getElementById('milestonesBody').innerHTML = milestones.length ? milestones.map(m=>`<tr>
+            <td>${m.milestone_name}</td><td>${fmtDate(m.target_date)}</td><td>${fmtDate(m.actual_date)}</td>
+            <td><select onchange="updateMilestoneStatus(${m.id}, this.value)">
+                ${['pending','in_progress','done','skipped'].map(s=>`<option value="${s}" ${m.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}
+            </select></td>
+        </tr>`).join('') : '<tr><td colspan="4" class="empty-state">No milestones yet.</td></tr>';
+    }catch(e){ document.getElementById('milestonesBody').innerHTML = '<tr><td colspan="4" class="empty-state">Error loading milestones.</td></tr>'; }
+}
+async function updateMilestoneStatus(milestoneId, status){
+    try{ await window.Api.post('/projects/milestones/'+milestoneId+'/status', { status }); }
+    catch(e){ alert('Could not update: '+(e.message||'Unknown error')); loadMilestones(); }
+}
+function openMilestoneModal(){
+    document.getElementById('fMilestoneName').value='';
+    document.getElementById('fMilestoneDate').value='';
+    document.getElementById('milestoneModal').classList.add('active');
+}
+async function saveMilestone(){
+    const milestoneName = document.getElementById('fMilestoneName').value.trim();
+    if(!milestoneName){ alert('Milestone name is required.'); return; }
+    try{
+        await window.Api.post('/projects/'+PROJECT_ID+'/milestones', { milestoneName, targetDate: document.getElementById('fMilestoneDate').value || undefined });
+        document.getElementById('milestoneModal').classList.remove('active');
+        loadMilestones();
+    }catch(e){ alert('Could not create milestone: '+(e.message||'Unknown error')); }
+}
+
+async function loadTeam(){
+    try{
+        const members = await window.Api.get('/projects/'+PROJECT_ID+'/members');
+        document.getElementById('membersBody').innerHTML = members.length ? members.map(m=>`<tr>
+            <td>${m.employee_name}</td><td>${m.username}</td><td>${m.role}</td><td>${fmtDate(m.added_at)}</td>
+            <td><button class="action-btn" onclick="removeMember(${m.employee_id})">Remove</button></td>
+        </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No team members yet.</td></tr>';
+    }catch(e){ document.getElementById('membersBody').innerHTML = '<tr><td colspan="5" class="empty-state">Error loading team.</td></tr>'; }
+}
+async function openMemberModal(){
+    try{
+        const employees = await window.Api.get('/employees').catch(()=>null);
+        if(employees){
+            document.getElementById('fMemberEmployee').innerHTML = employees.map(e=>`<option value="${e.id}">${e.employee_name||e.username}</option>`).join('');
+        } else {
+            document.getElementById('fMemberEmployee').innerHTML = '<option value="1">Employee #1 (employee list endpoint unavailable — enter ID manually if needed)</option>';
+        }
+    }catch(e){}
+    document.getElementById('memberModal').classList.add('active');
+}
+async function saveMember(){
+    const employeeId = document.getElementById('fMemberEmployee').value;
+    const role = document.getElementById('fMemberRole').value;
+    try{
+        await window.Api.post('/projects/'+PROJECT_ID+'/members', { employeeId, role });
+        document.getElementById('memberModal').classList.remove('active');
+        loadTeam();
+    }catch(e){ alert('Could not add member: '+(e.message||'Unknown error')); }
+}
+async function removeMember(employeeId){
+    if(!confirm('Remove this team member?')) return;
+    try{ await window.Api.delete('/projects/'+PROJECT_ID+'/members/'+employeeId); loadTeam(); }
+    catch(e){ alert('Could not remove: '+(e.message||'Unknown error')); }
+}
+
+async function loadDocuments(){
+    try{
+        const docs = await window.Api.get('/projects/'+PROJECT_ID+'/documents');
+        document.getElementById('documentsBody').innerHTML = docs.length ? docs.map(d=>`<tr>
+            <td>${d.file_name}</td><td><a href="${d.storage_path}" target="_blank" rel="noopener">${d.storage_path}</a></td><td>${d.uploaded_by_name||'—'}</td><td>${fmtDate(d.uploaded_at)}</td>
+            <td><button class="action-btn" onclick="removeDocument(${d.id})">Remove</button></td>
+        </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No documents yet.</td></tr>';
+    }catch(e){ document.getElementById('documentsBody').innerHTML = '<tr><td colspan="5" class="empty-state">Error loading documents.</td></tr>'; }
+}
+function openDocumentModal(){
+    document.getElementById('fDocName').value='';
+    document.getElementById('fDocPath').value='';
+    document.getElementById('documentModal').classList.add('active');
+}
+async function saveDocument(){
+    const fileName = document.getElementById('fDocName').value.trim();
+    const storagePath = document.getElementById('fDocPath').value.trim();
+    if(!fileName || !storagePath){ alert('Both fields are required.'); return; }
+    try{
+        await window.Api.post('/projects/'+PROJECT_ID+'/documents', { fileName, storagePath });
+        document.getElementById('documentModal').classList.remove('active');
+        loadDocuments();
+    }catch(e){ alert('Could not add document: '+(e.message||'Unknown error')); }
+}
+async function removeDocument(documentId){
+    if(!confirm('Remove this document reference?')) return;
+    try{ await window.Api.delete('/projects/documents/'+documentId); loadDocuments(); }
+    catch(e){ alert('Could not remove: '+(e.message||'Unknown error')); }
+}
+
+async function loadNotes(){
+    try{
+        const notes = await window.Api.get('/projects/'+PROJECT_ID+'/notes');
+        document.getElementById('notesBody').innerHTML = notes.length ? notes.map(n=>`
+            <div class="pm-note-card">${n.note}<div class="pm-note-meta">${n.author_name||'Unknown'} — ${fmtDateTime(n.created_at)}</div></div>
+        `).join('') : '<p class="empty-state">No notes yet.</p>';
+    }catch(e){ document.getElementById('notesBody').innerHTML = 'Error loading notes.'; }
+}
+async function addNote(){
+    const note = document.getElementById('newNoteText').value.trim();
+    if(!note){ alert('Note cannot be empty.'); return; }
+    try{
+        await window.Api.post('/projects/'+PROJECT_ID+'/notes', { note });
+        document.getElementById('newNoteText').value='';
+        loadNotes();
+    }catch(e){ alert('Could not add note: '+(e.message||'Unknown error')); }
+}
+
+async function loadActivity(){
+    try{
+        const activity = await window.Api.get('/projects/'+PROJECT_ID+'/activity');
+        document.getElementById('activityBody').innerHTML = activity.length ? activity.map(a=>`<tr>
+            <td>${a.action.replace(/_/g,' ')}</td><td>${a.employee_name||'—'}</td><td>${fmtDateTime(a.performed_at)}</td><td><code style="font-size:11px;">${JSON.stringify(a.detail)}</code></td>
+        </tr>`).join('') : '<tr><td colspan="4" class="empty-state">No activity yet.</td></tr>';
+    }catch(e){ document.getElementById('activityBody').innerHTML = '<tr><td colspan="4" class="empty-state">Error loading activity.</td></tr>'; }
+}
+
+async function loadTimeline(){
+    const from = document.getElementById('tlFrom').value, to = document.getElementById('tlTo').value;
+    if(!from || !to) return;
+    try{
+        const rows = await window.Api.get('/projects/'+PROJECT_ID+'/reports/timeline?fromDate='+from+'&toDate='+to);
+        document.getElementById('timelineBody').innerHTML = rows.length ? rows.map(r=>`<tr>
+            <td>${fmtDate(r.entry_date)}</td><td>${r.je_no}</td><td>${escapeHtml(r.narration)}</td><td><span class="badge">${r.source_type}</span></td><td>₹${fmt(r.total_amount)}</td>
+        </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No transactions in this range.</td></tr>';
+    }catch(e){ document.getElementById('timelineBody').innerHTML = '<tr><td colspan="5" class="empty-state">Error loading timeline.</td></tr>'; }
+}
+
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

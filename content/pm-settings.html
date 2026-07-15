@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Settings</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+.pm-section { background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px)); border-radius:10px; padding:16px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.08); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header"><h2>Project Settings</h2></div>
+
+    <div class="pm-section">
+        <h3>Project Categories</h3>
+        <div class="field-row">
+            <input type="text" id="newCategoryName" placeholder="New category name…" style="flex:1;padding:8px;">
+            <button class="btn-primary" onclick="addCategory()">Add</button>
+        </div>
+        <table style="margin-top:12px;"><thead><tr><th>Name</th><th>Description</th><th>Created</th></tr></thead><tbody id="categoriesBody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody></table>
+    </div>
+
+    <div class="pm-section">
+        <h3>Available Project Statuses</h3>
+        <!--
+          Read-only, intentionally: statuses and their allowed
+          transitions are enforced by the backend's ALLOWED_TRANSITIONS
+          rule in src/lib/projects.ts, not stored as editable
+          configuration anywhere. Showing them as editable here would
+          be UI for a setting the backend doesn't actually support.
+        -->
+        <table>
+            <thead><tr><th>Status</th><th>Can Move To</th></tr></thead>
+            <tbody>
+                <tr><td><span class="badge draft">draft</span></td><td>active</td></tr>
+                <tr><td><span class="badge active">active</span></td><td>on hold, closing</td></tr>
+                <tr><td><span class="badge on_hold">on hold</span></td><td>active</td></tr>
+                <tr><td><span class="badge closing">closing</span></td><td>closed, active</td></tr>
+                <tr><td><span class="badge closed">closed</span></td><td>— (terminal)</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pm-section">
+        <h3>Not Available</h3>
+        <p style="font-size:13px;color:#888;">
+            <b>Default Values</b> and <b>User Preferences</b> have no backend concept to configure —
+            no such settings are stored anywhere in this system.
+            <b>Templates</b> were explicitly deferred during the architecture review (a project template
+            table doesn't exist yet — reserved for when a second real use case justifies it, per this
+            project's own "don't build speculative generality" principle). None of these appear above
+            because building UI for them would mean UI for settings that don't actually do anything.
+        </p>
+    </div>
+  </div>
+</div>
+
+<script>
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadCategories();
+});
+async function loadCategories(){
+    try{
+        const categories = await window.Api.get('/project-categories');
+        document.getElementById('categoriesBody').innerHTML = categories.length ? categories.map(c=>`<tr><td>${c.name}</td><td>${c.description||'—'}</td><td>${new Date(c.created_at).toLocaleDateString('en-IN')}</td></tr>`).join('') : '<tr><td colspan="3" class="empty-state">No categories yet.</td></tr>';
+    }catch(e){ document.getElementById('categoriesBody').innerHTML = '<tr><td colspan="3" class="empty-state">Could not load categories.</td></tr>'; }
+}
+async function addCategory(){
+    const name = document.getElementById('newCategoryName').value.trim();
+    if(!name){ alert('Category name is required.'); return; }
+    try{
+        await window.Api.post('/project-categories', { name });
+        document.getElementById('newCategoryName').value='';
+        loadCategories();
+    }catch(e){ alert('Could not add category: '+(e.message||'Unknown error')); }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

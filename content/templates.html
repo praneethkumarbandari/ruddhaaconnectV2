@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Templates</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .pagination { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 14px; font-size: 13px; color: #667; }
+  .pagination button { padding: 5px 12px; border: 1px solid #dbe1ea; border-radius: 6px; background: #fff; cursor: pointer; }
+  .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Document Templates</h2>
+    <button class="btn-primary" onclick="openTemplateModal()"><i class="fa-solid fa-plus"></i> Add Template</button>
+  </div>
+  <!--
+    NEW MODULE (was genuinely missing): a reusable named-template
+    library — distinct from pdf-print-styles.html, which only controls
+    Invoice/Receipt/Payment PDF layout. Full CRUD via
+    src/routes/document-templates.ts: search, category filter,
+    pagination, add/view/edit/duplicate/deactivate, permissioned
+    (templates.view / templates.manage), audited.
+  -->
+  <div class="filter-bar">
+    <input type="text" id="fSearch" placeholder="Search name or content…" oninput="debouncedReload()">
+    <select id="fCategory" onchange="reload()">
+      <option value="">All Categories</option>
+      <option value="general">General</option>
+      <option value="email">Email</option>
+      <option value="notice">Notice / Letter</option>
+      <option value="clause">Standard Clause</option>
+    </select>
+  </div>
+
+  <table class="data-table">
+    <thead><tr><th>Name</th><th>Category</th><th>Last Updated</th><th>Actions</th></tr></thead>
+    <tbody id="tplBody"><tr><td colspan="4" class="empty-state">Loading…</td></tr></tbody>
+  </table>
+
+  <div class="pagination">
+    <span id="pageInfo">—</span>
+    <button id="prevPageBtn" onclick="changePage(-1)">← Prev</button>
+    <button id="nextPageBtn" onclick="changePage(1)">Next →</button>
+  </div>
+</div>
+
+<!-- Add/Edit/View modal -->
+<div class="modal" id="tplModal">
+  <div class="modal-content" style="max-width:640px;">
+    <div class="modal-header"><h3 id="tplModalTitle">Add Template</h3><button class="modal-close" onclick="closeModal('tplModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Name *</label><input type="text" id="tplName"></div>
+      <div class="field"><label>Category</label>
+        <select id="tplCategory">
+          <option value="general">General</option>
+          <option value="email">Email</option>
+          <option value="notice">Notice / Letter</option>
+          <option value="clause">Standard Clause</option>
+        </select>
+      </div>
+      <div class="field" id="tplSubjectRow"><label>Subject (for email templates)</label><input type="text" id="tplSubject"></div>
+      <div class="field"><label>Body *</label><textarea id="tplBody" rows="10"></textarea></div>
+      <div class="err-msg" id="tplErr"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('tplModal')">Cancel</button>
+      <button class="btn-primary" id="tplSaveBtn" onclick="saveTemplate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPage = 1, currentTotal = 0, pageSize = 20, editingId = null, viewOnly = false, debounceTimer = null;
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+  setupSidebar();
+  reload();
+});
+
+function debouncedReload(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(function(){ currentPage = 1; reload(); }, 300); }
+
+async function reload(){
+  const body = document.getElementById('tplBody');
+  body.innerHTML = '<tr><td colspan="4" class="empty-state">Loading…</td></tr>';
+  const q = document.getElementById('fSearch').value.trim();
+  const category = document.getElementById('fCategory').value;
+  try{
+    const params = new URLSearchParams({ page: currentPage, pageSize });
+    if(q) params.set('q', q);
+    if(category) params.set('category', category);
+    const result = await window.Api.get('/document-templates?' + params.toString());
+    currentTotal = result.total;
+    renderRows(result.rows);
+    renderPagination();
+  }catch(e){
+    body.innerHTML = '<tr><td colspan="4" class="empty-state">Could not load templates: '+escapeHtml(e.message||'Unknown error')+'</td></tr>';
+  }
+}
+
+function renderRows(rows){
+  const body = document.getElementById('tplBody');
+  if(!rows.length){ body.innerHTML = '<tr><td colspan="4" class="empty-state">No templates found. Click "Add Template" to create one.</td></tr>'; return; }
+  body.innerHTML = rows.map(t => `<tr>
+    <td>${escapeHtml(t.name)}</td>
+    <td>${escapeHtml(t.category)}</td>
+    <td>${new Date(t.updated_at).toLocaleDateString('en-IN')}</td>
+    <td>
+      <button class="action-btn" onclick="openTemplateModal(${t.id}, true)"><i class="fa-solid fa-eye"></i> View</button>
+      <button class="action-btn" onclick="openTemplateModal(${t.id}, false)"><i class="fa-solid fa-pen"></i> Edit</button>
+      <button class="action-btn" onclick="duplicateTemplate(${t.id})"><i class="fa-solid fa-copy"></i> Duplicate</button>
+      <button class="action-btn" onclick="deleteTemplate(${t.id})"><i class="fa-solid fa-trash"></i> Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+function renderPagination(){
+  const totalPages = Math.max(Math.ceil(currentTotal / pageSize), 1);
+  document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages} (${currentTotal} total)`;
+  document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+  document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+}
+function changePage(delta){ currentPage += delta; reload(); }
+
+async function openTemplateModal(id, readOnly){
+  editingId = id || null;
+  viewOnly = !!readOnly;
+  document.getElementById('tplErr').style.display = 'none';
+  document.getElementById('tplModalTitle').textContent = id ? (readOnly ? 'View Template' : 'Edit Template') : 'Add Template';
+  document.getElementById('tplSaveBtn').style.display = readOnly ? 'none' : 'inline-block';
+  ['tplName','tplCategory','tplSubject','tplBody'].forEach(id2 => document.getElementById(id2).disabled = !!readOnly);
+
+  if(id){
+    try{
+      const t = await window.Api.get('/document-templates/'+id);
+      document.getElementById('tplName').value = t.name;
+      document.getElementById('tplCategory').value = t.category;
+      document.getElementById('tplSubject').value = t.subject || '';
+      document.getElementById('tplBody').value = t.body || '';
+    }catch(e){
+      alert('Could not load template: ' + (e.message||'Unknown error'));
+      return;
+    }
+  } else {
+    document.getElementById('tplName').value = '';
+    document.getElementById('tplCategory').value = 'general';
+    document.getElementById('tplSubject').value = '';
+    document.getElementById('tplBody').value = '';
+  }
+  document.getElementById('tplModal').classList.add('active');
+}
+
+async function saveTemplate(){
+  const name = document.getElementById('tplName').value.trim();
+  const category = document.getElementById('tplCategory').value;
+  const subject = document.getElementById('tplSubject').value.trim() || null;
+  const body = document.getElementById('tplBody').value;
+  const err = document.getElementById('tplErr');
+  if(!name){ err.textContent = 'Name is required.'; err.style.display = 'block'; return; }
+  try{
+    if(editingId) await window.Api.patch('/document-templates/'+editingId, { name, category, subject, body });
+    else await window.Api.post('/document-templates', { name, category, subject, body });
+    closeModal('tplModal');
+    await reload();
+  }catch(e){ err.textContent = e.message || 'Could not save.'; err.style.display = 'block'; }
+}
+
+async function duplicateTemplate(id){
+  try{ await window.Api.post('/document-templates/'+id+'/duplicate', {}); await reload(); }
+  catch(e){ alert('Could not duplicate: ' + (e.message||'Unknown error')); }
+}
+
+async function deleteTemplate(id){
+  if(!confirm('Deactivate this template? It will no longer appear in the list, but history referencing it is preserved.')) return;
+  try{ await window.Api.post('/document-templates/'+id+'/deactivate', {}); await reload(); }
+  catch(e){ alert('Could not delete: ' + (e.message||'Unknown error')); }
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Attendance</h2>
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Add Record</button>
+  </div>
+  <!--
+    NOTE: This page now talks to the Attendance Engine API
+    (/api/attendance/records, schema-attendance.sql) — records are
+    keyed by employee + date + in/out timestamps and a status derived
+    server-side from shift rules, not a free-text status the user
+    picks directly. Manual entry here uses PUT /attendance/manual,
+    the same "HR-only, exceptional use" path the backend documents for
+    backfilling — the normal path for most records is the biometric
+    import (see the Import tab), not this form.
+  -->
+  <div class="filter-bar">
+    <select id="filterEmployee" onchange="loadAttendance()"><option value="">All Employees</option></select>
+    <input type="date" id="filterDateFrom" onchange="loadAttendance()">
+    <input type="date" id="filterDateTo" onchange="loadAttendance()">
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Records Shown</h4><div class="s-val" id="cntTotal">—</div></div>
+    <div class="summary-card"><h4>Present</h4><div class="s-val" id="cntPresent">—</div></div>
+    <div class="summary-card"><h4>Absent</h4><div class="s-val" id="cntAbsent">—</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Employee Code</th><th>Name</th><th>Date</th><th>In</th><th>Out</th><th>Status</th><th>Remarks</th></tr></thead>
+      <tbody id="attBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="attModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Attendance Record</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="attModalMsg"></div>
+      <div class="field"><label>Employee *</label><select id="fEmployee"><option value="">Select employee…</option></select></div>
+      <div class="field"><label>Date *</label><input type="date" id="fDate"></div>
+      <div class="field"><label>In Time</label><input type="time" id="fIn"></div>
+      <div class="field"><label>Out Time</label><input type="time" id="fOut"></div>
+      <div class="field"><label>Remarks</label><textarea id="fRemarks" placeholder="Optional notes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveAttendance()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let employees = [], allRecords = [];
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadEmployeePicker();
+    loadAttendance();
+});
+
+async function loadEmployeePicker(){
+    try {
+        const result = await window.Api.get('/hr/employees?pageSize=200');
+        employees = result.rows || [];
+        const opts = employees.map(e=>`<option value="${e.employee_id}">${e.employee_code} — ${escapeHtml(e.employee_name)}</option>`).join('');
+        document.getElementById('fEmployee').innerHTML = '<option value="">Select employee…</option>' + opts;
+        document.getElementById('filterEmployee').innerHTML = '<option value="">All Employees</option>' + opts;
+    } catch(e) {
+        console.warn('Could not load employee picker:', e.message);
+    }
+}
+
+function empLabel(id){ const e = employees.find(x=>String(x.employee_id)===String(id)); return e ? e.employee_name : ('#'+id); }
+function empCode(id){ const e = employees.find(x=>String(x.employee_id)===String(id)); return e ? e.employee_code : '—'; }
+
+async function loadAttendance(){
+    const params = new URLSearchParams();
+    const empId = document.getElementById('filterEmployee').value;
+    const from = document.getElementById('filterDateFrom').value;
+    const to = document.getElementById('filterDateTo').value;
+    if(empId) params.set('employeeId', empId);
+    if(from) params.set('dateFrom', from);
+    if(to) params.set('dateTo', to);
+    params.set('pageSize', '200');
+    try {
+        const result = await window.Api.get('/attendance/records?'+params.toString());
+        allRecords = result.rows || [];
+        renderTable(allRecords);
+        updateSummary(allRecords);
+    } catch(e) {
+        document.getElementById('attBody').innerHTML = '<tr><td colspan="8" class="empty-state">Could not load attendance: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function updateSummary(rows){
+    document.getElementById('cntTotal').textContent = rows.length;
+    document.getElementById('cntPresent').textContent = rows.filter(r=>(r.status_code||'').toUpperCase()==='PRESENT').length;
+    document.getElementById('cntAbsent').textContent = rows.filter(r=>(r.status_code||'').toUpperCase()==='ABSENT').length;
+}
+function renderTable(rows){
+    const tbody = document.getElementById('attBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No attendance records found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td>${r.employee_code||'—'}</td>
+        <td>${escapeHtml(r.employee_name)||'—'}</td>
+        <td>${r.attendance_date ? String(r.attendance_date).split('T')[0] : '—'}</td>
+        <td>${r.in_timestamp ? new Date(r.in_timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+        <td>${r.out_timestamp ? new Date(r.out_timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+        <td><span class="badge ${(r.status_code||'').toUpperCase()==='PRESENT'?'active':'inactive'}">${escapeHtml(r.status_name)||r.status_code||'—'}</span></td>
+        <td>${escapeHtml(r.remarks)||'—'}</td>
+    </tr>`).join('');
+}
+function openAddModal(){
+    document.getElementById('fEmployee').value = '';
+    document.getElementById('fDate').value = new Date().toISOString().slice(0,10);
+    document.getElementById('fIn').value = '';
+    document.getElementById('fOut').value = '';
+    document.getElementById('fRemarks').value = '';
+    document.getElementById('attModalMsg').textContent = '';
+    document.getElementById('attModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('attModal').classList.remove('active'); }
+async function saveAttendance(){
+    const employeeId = document.getElementById('fEmployee').value;
+    const attendanceDate = document.getElementById('fDate').value;
+    const inTime = document.getElementById('fIn').value;
+    const outTime = document.getElementById('fOut').value;
+    const remarks = document.getElementById('fRemarks').value.trim();
+    if(!employeeId || !attendanceDate){
+        document.getElementById('attModalMsg').textContent = 'Employee and date are required.';
+        return;
+    }
+    const payload = {
+        employeeId: Number(employeeId),
+        attendanceDate,
+        inTimestamp: inTime ? `${attendanceDate}T${inTime}:00` : null,
+        outTimestamp: outTime ? `${attendanceDate}T${outTime}:00` : null,
+        remarks: remarks || null,
+    };
+    try {
+        await window.Api.put('/attendance/records/manual', payload);
+        if(window.Audit) window.Audit.log('attendance', employeeId, 'CREATE', null, {attendanceDate});
+        closeModal();
+        loadAttendance();
+    } catch(e) {
+        document.getElementById('attModalMsg').textContent = 'Could not save: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

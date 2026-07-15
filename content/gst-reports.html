@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GST Reports</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.tab-bar{display:flex;gap:8px;margin-bottom:18px;border-bottom:2px solid #e2e6ee;}
+.tab-btn{padding:10px 16px;border:none;background:none;font-size:13px;font-weight:600;color:#8a93a6;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
+.tab-btn.active{color:var(--primary-color,#1f6bff);border-bottom-color:var(--primary-color,#1f6bff);}
+.report-card{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:20px;margin-bottom:16px;}
+.report-title{font-weight:700;font-size:14px;color:#1a2233;margin-bottom:10px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:8px 10px;border-bottom:1px solid #f0f2f6;}
+.limitation-note{background:#fff3cd;color:#856404;padding:10px 14px;border-radius:6px;font-size:12px;margin-top:8px;}
+.placeholder-box{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:60px;text-align:center;color:#aaa;font-size:14px;}
+</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header"><h2>GST Reports</h2></div>
+
+    <div class="filter-bar">
+        <label style="font-size:13px;font-weight:600;color:#555">From:</label>
+        <input type="date" id="fFrom">
+        <label style="font-size:13px;font-weight:600;color:#555">To:</label>
+        <input type="date" id="fTo">
+        <button class="btn-primary" onclick="loadCurrentTab()">Generate</button>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('summary')">Summary</button>
+      <button class="tab-btn" onclick="switchTab('gstr3b')">GSTR-3B Format</button>
+      <button class="tab-btn" onclick="switchTab('hsn')">HSN Summary</button>
+      <button class="tab-btn" onclick="switchTab('b2b')">B2B / B2C Detail</button>
+      <button class="tab-btn" onclick="switchTab('advances')">Advances</button>
+      <button class="tab-btn" onclick="switchTab('reconcile')">GSTR-2A/2B Reconciliation</button>
+    </div>
+
+    <div id="reportArea"><div class="placeholder-box">Select a date range and click Generate.</div></div>
+  </div>
+
+<script>
+let currentTab = 'summary';
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded',function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('fFrom').value = today.slice(0,8)+'01';
+    document.getElementById('fTo').value = today;
+});
+
+function switchTab(tab){
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    event.target.classList.add('active');
+    if (tab === 'reconcile') {
+        document.getElementById('reportArea').innerHTML = `
+          <div class="report-card">
+            <div class="report-title">Upload GSTR-2A/2B Export</div>
+            <p style="font-size:13px;color:#555;margin-bottom:10px;">Upload the file downloaded directly from the GST portal. This compares it against your own purchase records — it does not connect to GSTN directly.</p>
+            <input type="file" id="reconcileFile" accept=".csv,.xlsx,.xls">
+            <button class="btn-primary" style="margin-left:10px;" onclick="runReconciliation()">Compare</button>
+          </div>`;
+    } else {
+        document.getElementById('reportArea').innerHTML = '<div class="placeholder-box">Click Generate to load this report.</div>';
+    }
+}
+function loadCurrentTab(){
+    if (currentTab === 'summary') loadSummary();
+    else if (currentTab === 'gstr3b') loadGstr3b();
+    else if (currentTab === 'hsn') loadHsn();
+    else if (currentTab === 'b2b') loadB2b();
+    else if (currentTab === 'advances') loadAdvances();
+    // 'reconcile' has its own Compare button, not the shared Generate button
+}
+
+function getRange(){
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    if(!from || !to){ alert('Both From and To dates are required.'); return null; }
+    return { from, to };
+}
+function loadingState(){
+    document.getElementById('reportArea').innerHTML = '<div class="placeholder-box">Generating…</div>';
+}
+function errorState(msg){
+    document.getElementById('reportArea').innerHTML = '<div class="placeholder-box" style="color:#c0392b;">'+msg+'</div>';
+}
+
+async function loadSummary(){
+    const r = getRange(); if(!r) return;
+    loadingState();
+    try{
+        const gst = await window.Api.get('/reports/gst?fromDate='+encodeURIComponent(r.from)+'&toDate='+encodeURIComponent(r.to));
+        const outRows = (gst.output||[]).map(row=>`<tr><td>${row.account_code} — ${row.account_name}</td><td>₹${fmt(row.total_debit)}</td><td>₹${fmt(row.total_credit)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">None</td></tr>';
+        const inRows = (gst.input||[]).map(row=>`<tr><td>${row.account_code} — ${row.account_name}</td><td>₹${fmt(row.total_debit)}</td><td>₹${fmt(row.total_credit)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">None</td></tr>';
+        document.getElementById('reportArea').innerHTML = `
+            <div class="report-card"><div class="report-title">Output GST (collected on sales)</div>
+                <table><thead><tr><th>Account</th><th>Debit</th><th>Credit</th></tr></thead><tbody>${outRows}</tbody></table>
+                <p style="text-align:right;font-weight:700;padding:8px 0;">Total Output: ₹${fmt(gst.totalOutput)}</p></div>
+            <div class="report-card"><div class="report-title">Input GST (paid on purchases)</div>
+                <table><thead><tr><th>Account</th><th>Debit</th><th>Credit</th></tr></thead><tbody>${inRows}</tbody></table>
+                <p style="text-align:right;font-weight:700;padding:8px 0;">Total Input: ₹${fmt(gst.totalInput)}</p></div>
+            <div class="report-card"><div class="report-title">Net GST ${gst.netPayable>=0?'Payable':'Refundable'}: ₹${fmt(Math.abs(gst.netPayable))}</div></div>`;
+    }catch(e){ errorState('Could not generate GST report: '+(e.message||'Unknown error')); }
+}
+
+async function loadGstr3b(){
+    const r = getRange(); if(!r) return;
+    loadingState();
+    try{
+        const d = await window.Api.get('/gst-filing/gstr3b?fromDate='+encodeURIComponent(r.from)+'&toDate='+encodeURIComponent(r.to));
+        const s31 = d.section3_1, s4 = d.section4_eligibleItc, s6 = d.section6_1_paymentOfTax;
+        document.getElementById('reportArea').innerHTML = `
+            <div class="report-card">
+              <div class="report-title">3.1 Outward Taxable Supplies</div>
+              <table><thead><tr><th>Taxable Value</th><th>IGST</th><th>CGST</th><th>SGST</th></tr></thead>
+              <tbody><tr><td>₹${fmt(s31.outwardTaxableSupplies.taxableValue)}</td><td>₹${fmt(s31.outwardTaxableSupplies.igst)}</td><td>₹${fmt(s31.outwardTaxableSupplies.cgst)}</td><td>₹${fmt(s31.outwardTaxableSupplies.sgst)}</td></tr></tbody></table>
+              <div class="limitation-note">Zero-rated, nil-rated/exempt, and non-GST outward supplies are not tracked separately in this system — every invoice is treated as an ordinary taxable supply. If any apply to this period, adjust manually before filing.</div>
+            </div>
+            <div class="report-card">
+              <div class="report-title">4. Eligible ITC</div>
+              <table><thead><tr><th>Taxable Value</th><th>IGST</th><th>CGST</th><th>SGST</th></tr></thead>
+              <tbody><tr><td>₹${fmt(s4.itcAvailable.taxableValue)}</td><td>₹${fmt(s4.itcAvailable.igst)}</td><td>₹${fmt(s4.itcAvailable.cgst)}</td><td>₹${fmt(s4.itcAvailable.sgst)}</td></tr></tbody></table>
+              <div class="limitation-note">ITC reversed and ineligible/blocked credit are not categorized separately in this system — this figure is total ITC available, unadjusted for either.</div>
+            </div>
+            <div class="report-card">
+              <div class="report-title">6.1 Payment of Tax — Actual Set-Off (CBIC Rule 88A)</div>
+              <table><thead><tr><th></th><th>IGST</th><th>CGST</th><th>SGST</th></tr></thead>
+              <tbody>
+                <tr><td>Cash Payable</td><td>₹${fmt(s6.cashPayable.igst)}</td><td>₹${fmt(s6.cashPayable.cgst)}</td><td>₹${fmt(s6.cashPayable.sgst)}</td></tr>
+                <tr><td>Credit Carried Forward</td><td>₹${fmt(s6.creditCarriedForward.igst)}</td><td>₹${fmt(s6.creditCarriedForward.cgst)}</td><td>₹${fmt(s6.creditCarriedForward.sgst)}</td></tr>
+              </tbody></table>
+              <p style="margin-top:10px;">Total Output Tax: ₹${fmt(s6.totalOutputTax)} &nbsp;|&nbsp; Total ITC Available: ₹${fmt(s6.totalItcAvailable)} &nbsp;|&nbsp; <strong>Net Payable: ₹${fmt(s6.netPayable)}</strong></p>
+              <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12px;color:var(--primary-color,#1f6bff);">Show set-off working</summary>
+                <ol style="font-size:12px;color:#555;">${s6.working.map(w=>`<li>${w}</li>`).join('')}</ol>
+              </details>
+              <div class="limitation-note">${s6.note}</div>
+            </div>`;
+    }catch(e){ errorState('Could not generate GSTR-3B summary: '+(e.message||'Unknown error')); }
+}
+
+async function loadHsn(){
+    const r = getRange(); if(!r) return;
+    loadingState();
+    try{
+        const rows = await window.Api.get('/gst-filing/hsn-summary?fromDate='+encodeURIComponent(r.from)+'&toDate='+encodeURIComponent(r.to));
+        const body = rows.map(row=>`<tr><td>${row.hsn}</td><td>${fmt(row.total_qty)}</td><td>₹${fmt(row.taxable_value)}</td><td>₹${fmt(row.tax_amount)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty-state">No data.</td></tr>';
+        document.getElementById('reportArea').innerHTML = `
+            <div class="report-card"><div class="report-title">HSN-wise Summary</div>
+              <table><thead><tr><th>HSN</th><th>Qty</th><th>Taxable Value</th><th>Tax Amount</th></tr></thead><tbody>${body}</tbody></table>
+              <div class="limitation-note">Lines created before HSN tracking was added show as "(no HSN recorded)" — this is honest, not a bug. Only invoices created after that fix carry real HSN data.</div>
+            </div>`;
+    }catch(e){ errorState('Could not generate HSN summary: '+(e.message||'Unknown error')); }
+}
+
+async function loadB2b(){
+    const r = getRange(); if(!r) return;
+    loadingState();
+    try{
+        const d = await window.Api.get('/gst-filing/invoice-wise?fromDate='+encodeURIComponent(r.from)+'&toDate='+encodeURIComponent(r.to));
+        const rowHtml = (inv)=>`<tr><td>${inv.invoice_no}</td><td>${new Date(inv.invoice_date).toLocaleDateString('en-IN')}</td><td>${inv.customer_name}</td><td>${inv.gstin||'—'}</td><td>₹${fmt(inv.subtotal)}</td><td>₹${fmt(inv.gst_amount)}</td><td>₹${fmt(inv.total)}</td></tr>`;
+        const b2bRows = d.b2b.map(rowHtml).join('') || '<tr><td colspan="7" class="empty-state">None</td></tr>';
+        const b2cRows = d.b2c.map(rowHtml).join('') || '<tr><td colspan="7" class="empty-state">None</td></tr>';
+        document.getElementById('reportArea').innerHTML = `
+            <div class="report-card"><div class="report-title">B2B Invoices (customer has GSTIN)</div>
+              <table><thead><tr><th>Invoice No</th><th>Date</th><th>Customer</th><th>GSTIN</th><th>Taxable Value</th><th>GST</th><th>Total</th></tr></thead><tbody>${b2bRows}</tbody></table></div>
+            <div class="report-card"><div class="report-title">B2C Invoices (no GSTIN on file)</div>
+              <table><thead><tr><th>Invoice No</th><th>Date</th><th>Customer</th><th>GSTIN</th><th>Taxable Value</th><th>GST</th><th>Total</th></tr></thead><tbody>${b2cRows}</tbody></table></div>`;
+    }catch(e){ errorState('Could not generate invoice-wise detail: '+(e.message||'Unknown error')); }
+}
+async function loadAdvances(){
+    const r = getRange(); if(!r) return;
+    loadingState();
+    try{
+        const rows = await window.Api.get('/gst-filing/advances?fromDate='+encodeURIComponent(r.from)+'&toDate='+encodeURIComponent(r.to));
+        const body = rows.map(row=>`<tr><td>${row.receipt_no}</td><td>${new Date(row.receipt_date).toLocaleDateString('en-IN')}</td><td>${row.customer_name}</td><td>${row.gstin||'—'}</td><td>₹${fmt(row.unallocated_amount)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty-state">No advances found.</td></tr>';
+        document.getElementById('reportArea').innerHTML = `
+            <div class="report-card"><div class="report-title">Advances Received (unallocated receipts)</div>
+              <table><thead><tr><th>Receipt No</th><th>Date</th><th>Customer</th><th>GSTIN</th><th>Unallocated Amount</th></tr></thead><tbody>${body}</tbody></table>
+              <div class="limitation-note">Whether GST is actually due on any of these depends on goods-vs-service classification this system doesn't track (services are generally taxable on advance receipt; most goods have been exempted from this since Nov 2019). Confirm applicability before including in a filing.</div>
+            </div>`;
+    }catch(e){ errorState('Could not load advances: '+(e.message||'Unknown error')); }
+}
+
+// Raw upload — window.Api forces JSON + stringifies bodies, which
+// can't carry a file. Same pattern already used in Bank Import.
+async function runReconciliation(){
+    const file = document.getElementById('reconcileFile').files[0];
+    if (!file) { alert('Choose a file first.'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    loadingState();
+    try{
+        const token = localStorage.getItem('rc_token');
+        const resp = await fetch(window.RUDDHAA_API_BASE_URL + '/gst-filing/reconcile-2b', {
+            method: 'POST',
+            headers: token ? { Authorization: 'Bearer ' + token } : {},
+            body: fd,
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.error || 'Reconciliation failed.');
+        const matchedRows = d.matched.map(m=>`<tr><td>${m.invoiceNo}</td><td>${m.vendorName}</td><td>₹${fmt(m.ourTax)}</td><td>₹${fmt(m.gstnTax)}</td><td>${m.taxMismatch?'⚠️ Mismatch':'✓ Match'}</td></tr>`).join('') || '<tr><td colspan="5" class="empty-state">None</td></tr>';
+        const gstnOnlyRows = d.onlyInGstn.map(m=>`<tr><td>${m.invoiceNo}</td><td>${m.gstin}</td><td>₹${fmt(m.tax)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">None</td></tr>';
+        const oursOnlyRows = d.onlyInOurBooks.map(m=>`<tr><td>${m.invoiceNo}</td><td>${m.vendorName}</td><td>₹${fmt(m.tax)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty-state">None</td></tr>';
+        document.getElementById('reportArea').innerHTML = `
+            <div class="report-card"><div class="report-title">Matched Invoices</div>
+              <table><thead><tr><th>Invoice No</th><th>Vendor</th><th>Our Tax</th><th>GSTR-2B Tax</th><th>Status</th></tr></thead><tbody>${matchedRows}</tbody></table></div>
+            <div class="report-card"><div class="report-title">⚠️ In GSTR-2B but not in our purchase records</div>
+              <table><thead><tr><th>Invoice No</th><th>GSTIN</th><th>Tax</th></tr></thead><tbody>${gstnOnlyRows}</tbody></table>
+              <div class="limitation-note">Vendor filed this, but it's not recorded as a purchase here — check whether it needs to be entered.</div></div>
+            <div class="report-card"><div class="report-title">⚠️ In our books but not in GSTR-2B — real compliance risk</div>
+              <table><thead><tr><th>Invoice No</th><th>Vendor</th><th>Tax</th></tr></thead><tbody>${oursOnlyRows}</tbody></table>
+              <div class="limitation-note">ITC is being claimed here, but the vendor's own GST filing doesn't show it — this credit may be disallowed until the vendor files correctly.</div></div>`;
+    }catch(e){ errorState('Could not reconcile: '+(e.message||'Unknown error')); }
+}
+
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

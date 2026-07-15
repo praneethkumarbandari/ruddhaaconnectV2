@@ -1,0 +1,226 @@
+<nav class="sidebar" id="sidebar">
+
+  <!-- Dashboard -->
+  <a href="/business-dashboard.html" class="nav-item" data-page="business-dashboard.html">
+    <span class="nav-icon"><i class="fa-solid fa-house"></i></span><span class="nav-label">Dashboard</span>
+  </a>
+
+  <!-- Accounting: transaction processing + master data ONLY. Payments,
+       Receipts, and Contra are deliberately NOT here — every money
+       movement now originates from Bank & Cash (see that section
+       below), mapped to a journal entry from one real transaction
+       inbox instead of three separate entry screens for the same
+       underlying journal_entries table. Chart of Accounts is kept
+       here (not hidden) since it's still an accounting master, even
+       though day-to-day work doesn't need it — see the System note. -->
+  <div class="nav-group-toggle" id="toggleAccounting" onclick="toggleGroup(this)">
+    <span class="nav-icon"><i class="fa-solid fa-sack-dollar"></i></span><span class="nav-label">Accounting</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subAccounting">
+    <a href="/customers.html" class="nav-item" data-page="customers.html" data-module="customers">
+      <span class="nav-icon"><i class="fa-solid fa-user"></i></span><span class="nav-label">Customers</span>
+    </a>
+    <a href="/vendors.html" class="nav-item" data-page="vendors.html" data-module="vendors">
+      <span class="nav-icon"><i class="fa-solid fa-industry"></i></span><span class="nav-label">Vendors</span>
+    </a>
+    <a href="/invoices.html" class="nav-item" data-page="invoices.html" data-module="sales-invoices,purchase-invoices">
+      <span class="nav-icon"><i class="fa-solid fa-file-invoice"></i></span><span class="nav-label">Invoices</span>
+    </a>
+    <a href="/journal-entries.html" class="nav-item" data-page="journal-entries.html" data-module="journal-entries">
+      <span class="nav-icon"><i class="fa-solid fa-book"></i></span><span class="nav-label">Journal Entry</span>
+    </a>
+    <a href="/bank-transactions.html" class="nav-item" data-page="bank-transactions.html" data-module="bank-accounts">
+      <span class="nav-icon"><i class="fa-solid fa-building-columns"></i></span><span class="nav-label">Bank &amp; Cash</span>
+    </a>
+    <a href="/chart-of-accounts.html" class="nav-item" data-page="chart-of-accounts.html" data-module="chart-of-accounts">
+      <span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Chart of Accounts</span>
+    </a>
+  </div>
+
+  <!-- Inventory: ONE Stock Movement engine -->
+  <div class="nav-group-toggle" id="toggleInventory" onclick="toggleGroup(this)" data-module="inventory">
+    <span class="nav-icon"><i class="fa-solid fa-boxes-stacked"></i></span><span class="nav-label">Inventory</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subInventory">
+    <a href="/inventory.html" class="nav-item" data-page="inventory.html">
+      <span class="nav-icon"><i class="fa-solid fa-box"></i></span><span class="nav-label">Stock Movement</span>
+    </a>
+    <a href="/stock-in.html" class="nav-item" data-page="stock-in.html">
+      <span class="nav-icon"><i class="fa-solid fa-arrow-down-to-bracket"></i></span><span class="nav-label">Stock In</span>
+    </a>
+    <a href="/stock-out.html" class="nav-item" data-page="stock-out.html">
+      <span class="nav-icon"><i class="fa-solid fa-truck-ramp-box"></i></span><span class="nav-label">Stock Out</span>
+    </a>
+    <a href="/inventory-ledger.html" class="nav-item" data-page="inventory-ledger.html">
+      <span class="nav-icon"><i class="fa-solid fa-clipboard-list"></i></span><span class="nav-label">Inventory Ledger</span>
+    </a>
+  </div>
+
+  <!-- Costing: now a main module, not an Accounting report — it's
+       operational (project/job costing), not a financial statement. -->
+  <a href="/costing.html" class="nav-item" data-page="costing.html" data-module="costing">
+    <span class="nav-icon"><i class="fa-solid fa-tag"></i></span><span class="nav-label">Costing</span>
+  </a>
+
+  <!-- CRM: works with Customers/Vendors via lookup only -->
+  <div class="nav-group-toggle" id="toggleCRM" onclick="toggleGroup(this)" data-module="crm">
+    <span class="nav-icon"><i class="fa-solid fa-diagram-project"></i></span><span class="nav-label">CRM</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subCRM">
+    <a href="/crm-dashboard.html" class="nav-item" data-page="crm-dashboard.html">
+      <span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span>
+    </a>
+    <a href="/crm-leads.html" class="nav-item" data-page="crm-leads.html">
+      <span class="nav-icon"><i class="fa-solid fa-user-plus"></i></span><span class="nav-label">Leads</span>
+    </a>
+    <a href="/crm-followups.html" class="nav-item" data-page="crm-followups.html">
+      <span class="nav-icon"><i class="fa-solid fa-phone"></i></span><span class="nav-label">Follow-ups</span>
+    </a>
+    <a href="/crm-activities.html" class="nav-item" data-page="crm-activities.html">
+      <span class="nav-icon"><i class="fa-solid fa-list-check"></i></span><span class="nav-label">Activities</span>
+    </a>
+    <a href="/customer-requests.html" class="nav-item" data-page="customer-requests.html" data-module="customer-requests">
+      <span class="nav-icon"><i class="fa-solid fa-envelope"></i></span><span class="nav-label">Customer Requests</span>
+    </a>
+  </div>
+
+  <!-- Projects (Project Management) -->
+  <div class="nav-group-toggle" id="togglePM" onclick="toggleGroup(this)" data-module="projects">
+    <span class="nav-icon"><i class="fa-solid fa-diagram-project"></i></span><span class="nav-label">Projects</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subPM">
+    <a href="/pm-dashboard.html" class="nav-item" data-page="pm-dashboard.html">
+      <span class="nav-icon"><i class="fa-solid fa-chart-column"></i></span><span class="nav-label">Dashboard</span>
+    </a>
+    <a href="/pm-projects.html" class="nav-item" data-page="pm-projects.html">
+      <span class="nav-icon"><i class="fa-solid fa-building"></i></span><span class="nav-label">Projects</span>
+    </a>
+    <a href="/pm-reports.html" class="nav-item" data-page="pm-reports.html">
+      <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span><span class="nav-label">Reports</span>
+    </a>
+    <a href="/project-hierarchy.html" class="nav-item" data-page="project-hierarchy.html">
+      <span class="nav-icon"><i class="fa-solid fa-sitemap"></i></span><span class="nav-label">Hierarchy</span>
+    </a>
+    <a href="/project-templates.html" class="nav-item" data-page="project-templates.html" data-module="admin">
+      <span class="nav-icon"><i class="fa-solid fa-layer-group"></i></span><span class="nav-label">Templates</span>
+    </a>
+    <a href="/pm-settings.html" class="nav-item" data-page="pm-settings.html" data-module="admin">
+      <span class="nav-icon"><i class="fa-solid fa-gear"></i></span><span class="nav-label">Settings</span>
+    </a>
+  </div>
+
+  <!-- HR -->
+  <div class="nav-group-toggle" id="toggleHR" onclick="toggleGroup(this)" data-module="hr,employees,attendance,leave,payroll">
+    <span class="nav-icon"><i class="fa-solid fa-user-tie"></i></span><span class="nav-label">HR</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subHR">
+    <a href="/employees.html" class="nav-item" data-page="employees.html" data-module="employees">
+      <span class="nav-icon"><i class="fa-solid fa-user"></i></span><span class="nav-label">Employees</span>
+    </a>
+    <a href="/attendance.html" class="nav-item" data-page="attendance.html" data-module="attendance">
+      <span class="nav-icon"><i class="fa-solid fa-calendar-check"></i></span><span class="nav-label">Attendance</span>
+    </a>
+    <a href="/leave.html" class="nav-item" data-page="leave.html" data-module="leave">
+      <span class="nav-icon"><i class="fa-solid fa-umbrella-beach"></i></span><span class="nav-label">Leave</span>
+    </a>
+    <a href="/salary.html" class="nav-item" data-page="salary.html" data-module="payroll">
+      <span class="nav-icon"><i class="fa-solid fa-money-bill"></i></span><span class="nav-label">Salary</span>
+    </a>
+    <a href="/hr-reports.html" class="nav-item" data-page="hr-reports.html" data-module="hr">
+      <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span><span class="nav-label">HR Reports</span>
+    </a>
+    <a href="/hr-masters.html" class="nav-item" data-page="hr-masters.html" data-module="hr">
+      <span class="nav-icon"><i class="fa-solid fa-sitemap"></i></span><span class="nav-label">HR Masters</span>
+    </a>
+  </div>
+
+  <!-- Taxation: GST/TDS pulled out of Accounting into their own home,
+       since they're compliance workflows, not day-to-day bookkeeping.
+       GST Returns / TDS Returns / TDS Settings are on the roadmap
+       (see accompanying review notes) — not linked here yet because
+       no working page exists for them; a menu item pointing nowhere
+       is worse than no menu item. -->
+  <div class="nav-group-toggle" id="toggleTaxation" onclick="toggleGroup(this)" data-module="admin">
+    <span class="nav-icon"><i class="fa-solid fa-landmark-flag"></i></span><span class="nav-label">Taxation</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subTaxation">
+    <a href="/gst-reports.html" class="nav-item" data-page="gst-reports.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-file-lines"></i></span><span class="nav-label">GST Reports</span>
+    </a>
+    <a href="/gst-settings.html" class="nav-item" data-page="gst-settings.html" data-module="admin">
+      <span class="nav-icon"><i class="fa-solid fa-gear"></i></span><span class="nav-label">GST Settings</span>
+    </a>
+    <a href="/tds-reports.html" class="nav-item" data-page="tds-reports.html" data-module="payments">
+      <span class="nav-icon"><i class="fa-solid fa-file-lines"></i></span><span class="nav-label">TDS Reports</span>
+    </a>
+  </div>
+
+  <!-- Reports: every financial statement, all reading from posted
+       journal entries only (see reports.ts). General Ledger now
+       covers customer/vendor/bank ledgers too — see its own page for
+       the ledger picker — so Customer Ledger, Vendor Ledger, Cash
+       Book, and Bank Book are gone from here rather than duplicated
+       (Bank & Cash's own per-account view already IS the cash/bank
+       book for a real bank account). P&L Report was an empty,
+       unwired duplicate of Profit & Loss — dropped rather than kept
+       as a second, confusing entry point to the same statement. -->
+  <div class="nav-group-toggle" id="toggleReports" onclick="toggleGroup(this)" data-module="reports">
+    <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span><span class="nav-label">Reports</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subReports">
+    <a href="/general-ledger.html" class="nav-item" data-page="general-ledger.html" data-module="reports,chart-of-accounts">
+      <span class="nav-icon"><i class="fa-solid fa-book-open-reader"></i></span><span class="nav-label">General Ledger</span>
+    </a>
+    <a href="/trial-balance.html" class="nav-item" data-page="trial-balance.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-scale-balanced"></i></span><span class="nav-label">Trial Balance</span>
+    </a>
+    <a href="/profit-loss.html" class="nav-item" data-page="profit-loss.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span><span class="nav-label">Profit &amp; Loss</span>
+    </a>
+    <a href="/balance-sheet.html" class="nav-item" data-page="balance-sheet.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-landmark"></i></span><span class="nav-label">Balance Sheet</span>
+    </a>
+    <a href="/cash-flow-report.html" class="nav-item" data-page="cash-flow-report.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-droplet"></i></span><span class="nav-label">Cash Flow Report</span>
+    </a>
+    <a href="/daybook.html" class="nav-item" data-page="daybook.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-book-open"></i></span><span class="nav-label">Day Book</span>
+    </a>
+    <a href="/outstanding.html" class="nav-item" data-page="outstanding.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-clipboard-list"></i></span><span class="nav-label">Outstanding</span>
+    </a>
+    <a href="/custom-reports.html" class="nav-item" data-page="custom-reports.html" data-module="reports">
+      <span class="nav-icon"><i class="fa-solid fa-sliders"></i></span><span class="nav-label">Custom Reports</span>
+    </a>
+  </div>
+
+  <!-- Roles & Permissions -->
+  <a href="/permissions.html" class="nav-item" data-page="permissions.html" data-module="admin">
+    <span class="nav-icon"><i class="fa-solid fa-shield-halved"></i></span><span class="nav-label">Roles &amp; Permissions</span>
+  </a>
+
+  <!-- System: existing pages with no prior navigation entry -->
+  <div class="nav-group-toggle" id="toggleSystem" onclick="toggleGroup(this)" data-module="admin">
+    <span class="nav-icon"><i class="fa-solid fa-gears"></i></span><span class="nav-label">System</span><span class="nav-arrow">▾</span>
+  </div>
+  <div class="nav-sub" id="subSystem">
+    <a href="/data-import.html" class="nav-item" data-page="data-import.html">
+      <span class="nav-icon"><i class="fa-solid fa-file-import"></i></span><span class="nav-label">Data Import</span>
+    </a>
+    <a href="/activity-log.html" class="nav-item" data-page="activity-log.html">
+      <span class="nav-icon"><i class="fa-solid fa-clock-rotate-left"></i></span><span class="nav-label">Activity Log</span>
+    </a>
+    <a href="/templates.html" class="nav-item" data-page="templates.html" data-module="templates">
+      <span class="nav-icon"><i class="fa-solid fa-file-lines"></i></span><span class="nav-label">Document Templates</span>
+    </a>
+    <a href="/preferences.html" class="nav-item" data-page="preferences.html">
+      <span class="nav-icon"><i class="fa-solid fa-sliders"></i></span><span class="nav-label">Preferences</span>
+    </a>
+  </div>
+
+  <!-- Settings: ONE Configuration page -->
+  <a href="/settings.html" class="nav-item" data-page="settings.html" data-module="admin">
+    <span class="nav-icon"><i class="fa-solid fa-gear"></i></span><span class="nav-label">Settings</span>
+  </a>
+
+</nav>

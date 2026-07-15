@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activity Log</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{margin-bottom:18px;}
+.table-wrap{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:10px 12px;border-bottom:1px solid #f0f2f6;vertical-align:top;}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;}
+.badge.create{background:#d4edda;color:#155724;} .badge.update{background:#fff3cd;color:#856404;}
+.badge.deactivate,.badge.cancel{background:#f8d7da;color:#721c24;} .badge.post{background:#d1ecf1;color:#0c5460;}
+.diff-toggle{color:var(--primary-color,#1f6bff);cursor:pointer;font-size:12px;}
+.diff-box{display:none;font-family:monospace;font-size:11px;background:#f7f9fc;padding:8px;border-radius:6px;margin-top:6px;white-space:pre-wrap;max-width:400px;}
+.state-box{text-align:center;padding:40px;color:#aaa;}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="page-header"><h2>Activity Log</h2></div>
+
+  <div class="filter-bar">
+    <select id="fModule"><option value="">All modules</option></select>
+    <label style="font-size:13px;font-weight:600;color:#555">From:</label>
+    <input type="date" id="fFrom">
+    <label style="font-size:13px;font-weight:600;color:#555">To:</label>
+    <input type="date" id="fTo">
+    <button class="btn-primary" onclick="loadLog()">Filter</button>
+    <button class="btn-secondary" onclick="clearFilters()">Clear</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When</th><th>Who</th><th>Module</th><th>Action</th><th>Record</th><th>Details</th></tr></thead>
+      <tbody id="logBody"><tr><td colspan="6" class="state-box">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+window.addEventListener('DOMContentLoaded', async function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+  try {
+    const modules = await window.Api.get('/audit-log/modules');
+    document.getElementById('fModule').innerHTML = '<option value="">All modules</option>' +
+      modules.map(m=>`<option value="${m}">${m}</option>`).join('');
+  } catch(e) {}
+  loadLog();
+});
+
+async function loadLog(){
+  const body = document.getElementById('logBody');
+  body.innerHTML = '<tr><td colspan="6" class="state-box">Loading…</td></tr>';
+  const params = new URLSearchParams();
+  const module = document.getElementById('fModule').value;
+  const from = document.getElementById('fFrom').value;
+  const to = document.getElementById('fTo').value;
+  if (module) params.set('module', module);
+  if (from) params.set('fromDate', from);
+  if (to) params.set('toDate', to);
+  try {
+    const rows = await window.Api.get('/audit-log?'+params.toString());
+    renderTable(rows);
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="6" class="state-box">Could not load activity log: '+(e.message||'Access denied — this view requires admin permission.')+'</td></tr>';
+  }
+}
+
+function renderTable(rows){
+  const body = document.getElementById('logBody');
+  if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="state-box">No activity found for this filter.</td></tr>'; return; }
+  body.innerHTML = rows.map((r,i)=>`<tr>
+    <td>${new Date(r.performed_at).toLocaleString('en-IN')}</td>
+    <td>${escapeHtml(r.employee_name) || r.username || (r.user_id ? 'Employee #'+r.user_id : 'System')}</td>
+    <td>${r.module}</td>
+    <td><span class="badge ${r.action}">${r.action}</span></td>
+    <td>${r.record_id ?? '—'}</td>
+    <td>
+      ${(r.old_value || r.new_value) ? `<span class="diff-toggle" onclick="toggleDiff(${i})">View changes</span>
+      <div class="diff-box" id="diff-${i}">${r.old_value ? 'BEFORE:\\n'+JSON.stringify(r.old_value,null,2)+'\\n\\n':''}${r.new_value ? 'AFTER:\\n'+JSON.stringify(r.new_value,null,2):''}</div>` : '—'}
+    </td>
+  </tr>`).join('');
+}
+function toggleDiff(i){
+  const el = document.getElementById('diff-'+i);
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+function clearFilters(){
+  document.getElementById('fModule').value='';
+  document.getElementById('fFrom').value='';
+  document.getElementById('fTo').value='';
+  loadLog();
+}
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

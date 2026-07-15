@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Hierarchy</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .tree-node { border: 1px solid #eef0f4; border-radius: 8px; margin-bottom: 8px; }
+  .tree-node-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .tree-node-row:hover { background: rgba(74,108,247,0.03); }
+  .tree-level-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #667; background: #f4f5f8; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+  .tree-node-name { font-weight: 600; flex: 1; }
+  .tree-node-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #eef2ff; color: #4338ca; }
+  .tree-children { padding-left: 28px; padding-bottom: 8px; }
+  .tree-actions { display: flex; gap: 6px; }
+  .empty-hierarchy { text-align: center; padding: 40px; color: #aaa; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Project Hierarchy</h2>
+  </div>
+  <!--
+    Project Engine — Phase 1. This is the ONLY hierarchy management
+    screen in the app — it renders whatever levels the selected
+    project's template defines (Tower/Floor/Unit, or just Room, or
+    Branch/Classroom, or anything a future template defines) using one
+    generic tree renderer and one generic Create/Edit modal. There is
+    deliberately no separate "Towers" page, "Rooms" page, etc. — see
+    src/lib/project-hierarchy.ts.
+  -->
+  <div class="filter-bar" style="grid-template-columns:1fr;">
+    <select id="fProject" onchange="onProjectChange()"><option value="">Select a project…</option></select>
+  </div>
+
+  <div id="noTemplateNote" style="display:none;" class="empty-hierarchy">
+    This project has no Project Template assigned, so it has no structured hierarchy to manage.
+    Assign a template from the Projects page if this project needs one (e.g. Towers/Floors/Units, or Rooms) — it's optional and only needed for businesses that use it.
+  </div>
+
+  <div id="treeArea"></div>
+  <button class="btn-primary" id="addRootBtn" style="display:none;" onclick="openNodeModal(null)"><i class="fa-solid fa-plus"></i> Add Top-Level Node</button>
+</div>
+
+<!-- Create/Edit node modal — the ONE modal for every level -->
+<div class="modal" id="nodeModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="nodeModalTitle">Add Node</h3><button class="modal-close" onclick="closeModal('nodeModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field" id="levelFieldRow"><label>Level *</label><select id="nLevel"></select></div>
+      <div class="field"><label>Name *</label><input type="text" id="nName"></div>
+      <div class="field"><label>Code</label><input type="text" id="nCode" placeholder="Optional — e.g. A, 01, 101"></div>
+      <div class="field"><label>Description</label><textarea id="nDescription" rows="2"></textarea></div>
+      <div class="field"><label>Sequence</label><input type="number" id="nSequence" value="0"></div>
+      <div class="field"><label>Status</label><select id="nStatus"></select></div>
+      <div class="err-msg" id="nodeErr"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('nodeModal')">Cancel</button>
+      <button class="btn-primary" onclick="saveNode()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allProjects = [], currentProject = null, currentTemplate = null, currentNodes = [];
+let editingNodeId = null, addingUnderNodeId = null;
+
+window.addEventListener('DOMContentLoaded', async function(){
+  if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+  setupSidebar();
+  try{
+    allProjects = await window.Api.get('/projects');
+    document.getElementById('fProject').innerHTML = '<option value="">Select a project…</option>' +
+      allProjects.filter(p=>p.template_id).map(p=>`<option value="${p.id}">${escapeHtml(p.project_code)} — ${escapeHtml(p.project_name)}</option>`).join('');
+    if(!allProjects.some(p=>p.template_id)){
+      document.getElementById('treeArea').innerHTML = '<div class="empty-hierarchy">No projects have a Project Template assigned yet. Assign one from the Projects page to start building a hierarchy.</div>';
+    }
+  }catch(e){
+    document.getElementById('treeArea').innerHTML = '<div class="empty-hierarchy">Could not load projects: '+escapeHtml(e.message||'Unknown error')+'</div>';
+  }
+});
+
+async function onProjectChange(){
+  const projectId = document.getElementById('fProject').value;
+  document.getElementById('addRootBtn').style.display = 'none';
+  document.getElementById('noTemplateNote').style.display = 'none';
+  if(!projectId){ document.getElementById('treeArea').innerHTML = ''; return; }
+  currentProject = allProjects.find(p=>String(p.id)===String(projectId));
+  if(!currentProject.template_id){
+    document.getElementById('noTemplateNote').style.display = 'block';
+    document.getElementById('treeArea').innerHTML = '';
+    return;
+  }
+  document.getElementById('treeArea').innerHTML = '<div class="empty-hierarchy">Loading…</div>';
+  try{
+    currentTemplate = await window.Api.get('/project-templates/'+currentProject.template_id);
+    currentNodes = await window.Api.get('/project-hierarchy/'+projectId);
+    renderTree();
+    document.getElementById('addRootBtn').style.display = 'inline-block';
+  }catch(e){
+    document.getElementById('treeArea').innerHTML = '<div class="empty-hierarchy">Could not load hierarchy: '+escapeHtml(e.message||'Unknown error')+'</div>';
+  }
+}
+
+function renderTree(){
+  const area = document.getElementById('treeArea');
+  const roots = currentNodes.filter(n=>!n.parent_node_id);
+  if(!roots.length && !currentNodes.length){
+    area.innerHTML = `<div class="empty-hierarchy">No ${escapeHtml((currentTemplate.levels[0]||{display_name:'nodes'}).display_name)}s yet for this project. Click "Add Top-Level Node" to create the first one.</div>`;
+    return;
+  }
+  area.innerHTML = roots.map(n=>renderNode(n)).join('');
+}
+
+function renderNode(node){
+  const children = currentNodes.filter(n=>n.parent_node_id===node.id);
+  const childLevel = currentTemplate.levels.find(l=>l.parent_level_code===node.level_code);
+  return `<div class="tree-node">
+    <div class="tree-node-row">
+      <span class="tree-level-badge">${escapeHtml(node.level_display_name)}</span>
+      <span class="tree-node-name">${escapeHtml(node.node_name)}${node.node_code?' ('+escapeHtml(node.node_code)+')':''}</span>
+      <span class="tree-node-status">${escapeHtml(node.status)}</span>
+      <span class="tree-actions">
+        ${childLevel ? `<button class="action-btn" onclick="openNodeModal(${node.id})"><i class="fa-solid fa-plus"></i> Add ${escapeHtml(childLevel.display_name)}</button>` : ''}
+        <button class="action-btn" onclick="editNode(${node.id})"><i class="fa-solid fa-pen"></i> Edit</button>
+        <button class="action-btn" onclick="removeNode(${node.id})"><i class="fa-solid fa-trash"></i> Delete</button>
+      </span>
+    </div>
+    ${children.length ? `<div class="tree-children">${children.map(c=>renderNode(c)).join('')}</div>` : ''}
+  </div>`;
+}
+
+/**
+ * One modal for every level — openNodeModal(parentNodeId) figures out
+ * which level(s) are structurally valid under that parent (or
+ * top-level, if parentNodeId is null) from the template's own level
+ * definitions, same universal-CRUD principle as the backend.
+ */
+function openNodeModal(parentNodeId){
+  editingNodeId = null;
+  addingUnderNodeId = parentNodeId;
+  document.getElementById('nodeErr').style.display = 'none';
+  document.getElementById('nodeModalTitle').textContent = 'Add Node';
+  document.getElementById('nCode').value = '';
+  document.getElementById('nName').value = '';
+  document.getElementById('nDescription').value = '';
+  document.getElementById('nSequence').value = 0;
+
+  const parentLevelCode = parentNodeId ? currentNodes.find(n=>n.id===parentNodeId).level_code : null;
+  const validLevels = currentTemplate.levels.filter(l=>l.parent_level_code === parentLevelCode);
+  document.getElementById('levelFieldRow').style.display = validLevels.length > 1 ? 'block' : 'none';
+  document.getElementById('nLevel').innerHTML = validLevels.map(l=>`<option value="${l.id}">${escapeHtml(l.display_name)}</option>`).join('');
+
+  document.getElementById('nStatus').innerHTML = currentTemplate.statuses.map(s=>`<option value="${s.status_code}" ${s.is_default?'selected':''}>${escapeHtml(s.display_name)}</option>`).join('');
+  document.getElementById('nodeModal').classList.add('active');
+}
+
+function editNode(nodeId){
+  editingNodeId = nodeId;
+  addingUnderNodeId = null;
+  const node = currentNodes.find(n=>n.id===nodeId);
+  document.getElementById('nodeErr').style.display = 'none';
+  document.getElementById('nodeModalTitle').textContent = 'Edit ' + node.level_display_name;
+  document.getElementById('levelFieldRow').style.display = 'none';
+  document.getElementById('nCode').value = node.node_code || '';
+  document.getElementById('nCode').disabled = true; // level/code are structural — not editable after creation in Phase 1
+  document.getElementById('nName').value = node.node_name;
+  document.getElementById('nDescription').value = node.description || '';
+  document.getElementById('nSequence').value = node.sequence;
+  document.getElementById('nStatus').innerHTML = currentTemplate.statuses.map(s=>`<option value="${s.status_code}" ${s.status_code===node.status?'selected':''}>${escapeHtml(s.display_name)}</option>`).join('');
+  document.getElementById('nodeModal').classList.add('active');
+}
+
+async function saveNode(){
+  const err = document.getElementById('nodeErr');
+  const nodeName = document.getElementById('nName').value.trim();
+  if(!nodeName){ err.textContent = 'Name is required.'; err.style.display = 'block'; return; }
+  try{
+    if(editingNodeId){
+      await window.Api.patch('/project-hierarchy/nodes/'+editingNodeId, {
+        nodeName, description: document.getElementById('nDescription').value.trim() || null,
+        sequence: Number(document.getElementById('nSequence').value) || 0,
+        status: document.getElementById('nStatus').value,
+      });
+    } else {
+      await window.Api.post('/project-hierarchy/'+currentProject.id+'/nodes', {
+        parentNodeId: addingUnderNodeId,
+        levelId: Number(document.getElementById('nLevel').value),
+        nodeCode: document.getElementById('nCode').value.trim() || null,
+        nodeName, description: document.getElementById('nDescription').value.trim() || null,
+        sequence: Number(document.getElementById('nSequence').value) || 0,
+        status: document.getElementById('nStatus').value,
+      });
+    }
+    closeModal('nodeModal');
+    document.getElementById('nCode').disabled = false;
+    currentNodes = await window.Api.get('/project-hierarchy/'+currentProject.id);
+    renderTree();
+  }catch(e){ err.textContent = e.message || 'Could not save.'; err.style.display = 'block'; }
+}
+
+async function removeNode(nodeId){
+  if(!confirm('Delete this node? This only works if it has no child nodes.')) return;
+  try{
+    await window.Api.delete('/project-hierarchy/nodes/'+nodeId);
+    currentNodes = await window.Api.get('/project-hierarchy/'+currentProject.id);
+    renderTree();
+  }catch(e){ alert('Could not delete: ' + (e.message||'Unknown error')); }
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

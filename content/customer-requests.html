@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Requests</title>
+<script>
+        (function(){
+            try {
+                const cached = localStorage.getItem('portalTheme');
+                if(cached){
+                    const t = JSON.parse(cached);
+                    if(t.primary_color) document.documentElement.style.setProperty('--primary-color', t.primary_color);
+                    if(t.secondary_color) document.documentElement.style.setProperty('--secondary-color', t.secondary_color);
+                    if(t.background_color) document.documentElement.style.setProperty('--background-color', t.background_color);
+                    if(t.font_family) document.documentElement.style.setProperty('--font-family', t.font_family);
+                }
+            } catch(e){}
+        })();
+    </script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+</style>
+</head>
+<body>
+
+
+        <main class="main" id="mainArea">
+            <div id="errorState" style="display:none">
+                <p>⚠️ Session not found. Redirecting to login...</p>
+            </div>
+            <div id="dashContent">
+                <div class="section-title">
+                    <span>👥 Customer Requests Management</span>
+                </div>
+
+                <div class="status-grid">
+                    <div class="status-card">
+                        <h4>Open Requests</h4>
+                        <div class="stat-val" id="statOpen">0</div>
+                    </div>
+                    <div class="status-card">
+                        <h4>In Progress</h4>
+                        <div class="stat-val" id="statProgress">0</div>
+                    </div>
+                    <div class="status-card">
+                        <h4>Closed Requests</h4>
+                        <div class="stat-val" id="statClosed">0</div>
+                    </div>
+                </div>
+
+                <div class="filter-row">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search by customer name, email, or request details...">
+                    <select class="filter-select" id="statusFilter">
+                        <option value="ALL">All Statuses</option>
+                        <option value="Open">Open</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Closed">Closed</option>
+                    </select>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Customer Name</th>
+                                <th>Email</th>
+                                <th>Request Details</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="requestsTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align:center; color:#999;">Loading data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h3>Update Request Status</h3>
+            <input type="hidden" id="editRequestId">
+            <div class="form-group">
+                <label>Customer Name</label>
+                <input type="text" class="form-control" id="editCustomerName" readonly style="background:#f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Request Details</label>
+                <textarea class="form-control" id="editDetails" rows="4" readonly style="background:#f5f5f5; resize:none;"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select class="form-control" id="editStatus">
+                    <option value="Open">Open</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Closed">Closed</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveRequestStatus()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script>
+        // ============================================================
+        // SUPABASE CLIENT
+        // ============================================================
+        const db = window.db;
+
+        let allRequests = [];
+
+        // ============================================================
+        // SIDEBAR TOGGLE
+        // ============================================================
+        const sidebar        = document.getElementById("sidebar");
+        const mainArea       = document.getElementById("mainArea");
+        const sidebarOverlay = document.getElementById("sidebarOverlay");
+        const isMobile       = function(){ return window.innerWidth <= 900; };
+
+        if(document.getElementById("sidebarToggle")) {
+            document.getElementById("sidebarToggle").addEventListener("click", function(){
+                if(isMobile()){
+                    if(sidebar) sidebar.classList.toggle("mobile-open");
+                    if(sidebarOverlay) sidebarOverlay.classList.toggle("active");
+                } else {
+                    if(sidebar) sidebar.classList.toggle("collapsed");
+                    if(mainArea) mainArea.classList.toggle("expanded");
+                }
+            });
+        }
+
+        function closeSidebar(){
+            if(sidebar) sidebar.classList.remove("mobile-open");
+            if(sidebarOverlay) sidebarOverlay.classList.remove("active");
+        }
+
+        window.addEventListener("resize", function(){
+            if(!isMobile()){
+                if(sidebar) sidebar.classList.remove("mobile-open");
+                if(sidebarOverlay) sidebarOverlay.classList.remove("active");
+            }
+        });
+
+        // ============================================================
+        // SIDEBAR GROUP ACCORDION — only ONE group open at a time
+        // ============================================================
+        function toggleGroup(el){
+            const sub    = el.nextElementSibling;
+            const isOpen = sub && sub.classList.contains("open");
+
+            // Close ALL groups
+            document.querySelectorAll(".nav-group-toggle").forEach(function(t){ t.classList.remove("open"); });
+            document.querySelectorAll(".nav-sub").forEach(function(s){ s.classList.remove("open"); });
+
+            // If it was closed, open it; if it was already open, leave everything closed
+            if(!isOpen && sub && sub.classList.contains("nav-sub")){
+                el.classList.add("open");
+                sub.classList.add("open");
+            }
+        }
+
+        // ============================================================
+        // THEME & SESSION
+        // ============================================================
+        async function loadTheme(){
+            try {
+                const cached = localStorage.getItem('portalTheme');
+                if(cached){
+                    const data = JSON.parse(cached);
+                    if(data.primary_color) document.documentElement.style.setProperty('--primary-color', data.primary_color);
+                    if(data.secondary_color) document.documentElement.style.setProperty('--secondary-color', data.secondary_color);
+                    if(data.background_color) document.documentElement.style.setProperty('--background-color', data.background_color);
+                    if(data.font_family) document.documentElement.style.setProperty('--font-family', data.font_family);
+                    if(data.company_name){
+                        const cName = document.getElementById("companyName");
+                        if(cName) cName.textContent = data.company_name;
+                    }
+                    const logo = document.getElementById("companyLogo");
+                    if(logo && data.logo_path && data.logo_path.trim()){
+                        logo.src = data.logo_path.trim();
+                        logo.style.display = "block";
+                    }
+                }
+            } catch(err){}
+        }
+
+        function loadSession(){
+            try {
+                const stored = localStorage.getItem("loggedEmployee");
+                if(!stored) return showError();
+                const emp = JSON.parse(stored);
+                // FIX: was requiring emp.role_id, a field the login response
+                // never sends — POST /api/auth/login returns `role` (e.g.
+                // "Admin"), not `role_id` (see api-server/src/routes/auth.ts).
+                // role_id is undefined for every real login, so this check
+                // failed 100% of the time and bounced every logged-in user
+                // straight back to business-login.html.
+                // FIX (real bug — the actual "Session not found even after
+                // successful login" report): POST /api/auth/login returns
+                // `employeeName` (camelCase, see src/routes/auth.ts), never
+                // `employee_name`. Checking emp.employee_name here meant this
+                // condition was true for every real login, 100% of the time
+                // — the exact same shape of bug the role_id/role fix above
+                // already found once, just in a different field.
+                if(!emp || !emp.employee_id || !emp.employeeName || !emp.role){
+                    localStorage.removeItem("loggedEmployee");
+                    window.location.href = "business-login.html";
+                    return null;
+                }
+                return emp;
+            } catch(e){
+                showError();
+                return null;
+            }
+        }
+
+        function showError(){
+            const dContent = document.getElementById("dashContent");
+            if(dContent) dContent.style.display = "none";
+            const eState = document.getElementById("errorState");
+            if(eState) eState.style.display = "block";
+            setTimeout(function(){
+                window.location.href = "business-login.html";
+            }, 2000);
+        }
+
+        function logout(){
+            if(!confirm("Are you sure you want to logout?")){
+                return;
+            }
+            localStorage.removeItem("loggedEmployee");
+            sessionStorage.clear();
+            window.location.href = "business-login.html";
+        }
+
+        function renderEmployee(emp){
+            const eName = document.getElementById("employeeName");
+            if(eName) eName.textContent = emp.employeeName || "Employee";
+            const eMeta = document.getElementById("employeeMeta");
+            if(eMeta) eMeta.textContent = [emp.department, "Role: " + emp.role].filter(Boolean).join(" · ");
+        }
+
+        // ============================================================
+        // DATA FETCHING & RENDERING
+        // ============================================================
+        async function fetchRequests() {
+            try {
+                // Architecture migration: now reads from /api/customer-requests,
+                // which joins customer_name correctly (the real column from the
+                // customers table, not the non-existent name/email columns the
+                // old Supabase join tried to access).
+                const data = await window.Api.get('/customer-requests');
+                allRequests = data || [];
+                updateStats();
+                applyFilters();
+            } catch (err) {
+                console.error("Error fetching requests:", err);
+                document.getElementById("requestsTableBody").innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align:center; color:#e53935; font-weight:600;">
+                            Failed to load customer requests.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function updateStats() {
+            const openCount     = allRequests.filter(r => r.status === "Open").length;
+            const progressCount = allRequests.filter(r => r.status === "In Progress").length;
+            const closedCount   = allRequests.filter(r => r.status === "Closed").length;
+
+            document.getElementById("statOpen").textContent     = openCount;
+            document.getElementById("statProgress").textContent = progressCount;
+            document.getElementById("statClosed").textContent   = closedCount;
+        }
+
+        function applyFilters() {
+            const searchQuery  = document.getElementById("searchInput").value.toLowerCase();
+            const statusFilter = document.getElementById("statusFilter").value;
+
+            const filtered = allRequests.filter(r => {
+                const matchesStatus = (statusFilter === "ALL" || r.status === statusFilter);
+                const matchesSearch = (
+                    (r.customers?.name || "").toLowerCase().includes(searchQuery) ||
+                    (r.customers?.email || "").toLowerCase().includes(searchQuery) ||
+                    (r.subject || "").toLowerCase().includes(searchQuery) ||
+                    (r.description || "").toLowerCase().includes(searchQuery)
+                );
+                return matchesStatus && matchesSearch;
+            });
+
+            renderTable(filtered);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById("requestsTableBody");
+            tbody.innerHTML = "";
+
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align:center; color:#aaa; padding:20px;">
+                            No matching customer requests found.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            data.forEach(r => {
+                const tr = document.createElement("tr");
+
+                let dateStr = "—";
+                if (r.created_at) {
+                    try {
+                        dateStr = new Date(r.created_at).toLocaleDateString(undefined, {
+                            year: 'numeric', month: 'short', day: 'numeric'
+                        });
+                    } catch (e) {}
+                }
+
+                let statusClass = "open";
+                if (r.status === "In Progress") statusClass = "in-progress";
+                if (r.status === "Closed") statusClass = "closed";
+
+                const detail = [r.subject, r.description].filter(Boolean).join(" — ");
+
+                tr.innerHTML = `
+                    <td>${dateStr}</td>
+                    <td style="font-weight:600; color:#111;">${escapeHtml(r.customers?.name || "—")}</td>
+                    <td>${escapeHtml(r.customers?.email || "—")}</td>
+                    <td style="max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(detail)}">
+                        ${escapeHtml(detail || "—")}
+                    </td>
+                    <td><span class="badge ${statusClass}">${r.status || "Open"}</span></td>
+                    <td>
+                        <button class="action-btn" onclick="openEditModal(${r.id})">Manage</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openEditModal(id) {
+            const req = allRequests.find(r => r.id === id);
+            if (!req) return;
+
+            document.getElementById("editRequestId").value    = req.id;
+            document.getElementById("editCustomerName").value = req.customers?.name || "";
+            document.getElementById("editDetails").value      = [req.subject, req.description].filter(Boolean).join(" — ");
+            document.getElementById("editStatus").value       = req.status || "Open";
+
+            document.getElementById("editModal").classList.add("active");
+        }
+
+        function closeModal() {
+            document.getElementById("editModal").classList.remove("active");
+        }
+
+        async function saveRequestStatus() {
+            const id        = document.getElementById("editRequestId").value;
+            const newStatus = document.getElementById("editStatus").value;
+            const oldReq    = allRequests.find(r => String(r.id) === String(id));
+
+            try {
+                await window.Api.patch('/customer-requests/' + id, { status: newStatus });
+                if (window.Audit && oldReq) window.Audit.log('customer_requests', id, 'UPDATE', { status: oldReq.status }, { status: newStatus });
+
+                closeModal();
+                await fetchRequests();
+            } catch (err) {
+                console.error("Error updating request status:", err);
+                alert("Failed to save changes. Please try again.");
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // ============================================================
+        // INITIALIZATION
+        // ============================================================
+        document.addEventListener("DOMContentLoaded", function(){
+            const sessionData = localStorage.getItem("loggedEmployee");
+            if(!sessionData){
+                window.location.href = "business-login.html";
+                return;
+            }
+
+            loadTheme();
+            const emp = loadSession();
+            if(!emp) return;
+
+            renderEmployee(emp);
+
+            // Bind filter inputs
+            document.getElementById("searchInput").addEventListener("input", applyFilters);
+            document.getElementById("statusFilter").addEventListener("change", applyFilters);
+
+            // Fetch live transactional table tracking view
+            fetchRequests();
+        });
+    </script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/validation.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

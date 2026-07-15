@@ -1,0 +1,240 @@
+/* ========================================
+   RUDDHAACONNECT - UTILITIES
+   ======================================== */
+
+/* Margin & Padding */
+.m-0 { margin: 0; }
+.m-1 { margin: 4px; }
+.m-2 { margin: 8px; }
+.m-3 { margin: 12px; }
+.m-4 { margin: 16px; }
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: 4px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+
+.p-0 { padding: 0; }
+.p-1 { padding: 4px; }
+.p-2 { padding: 8px; }
+.p-3 { padding: 12px; }
+.p-4 { padding: 16px; }
+
+/* Display */
+.d-none { display: none; }
+.d-block { display: block; }
+.d-inline { display: inline; }
+.d-inline-block { display: inline-block; }
+.d-flex { display: flex; }
+.d-grid { display: grid; }
+.d-table { display: table; }
+
+/* Flexbox */
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-start { display: flex; align-items: center; justify-content: flex-start; }
+.flex-end { display: flex; align-items: center; justify-content: flex-end; }
+.flex-column { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+/* Text Alignment */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+.text-justify { text-align: justify; }
+
+/* Text Style */
+.text-bold { font-weight: 700; }
+.text-semi-bold { font-weight: 600; }
+.text-normal { font-weight: 400; }
+.text-italic { font-style: italic; }
+.text-uppercase { text-transform: uppercase; }
+.text-lowercase { text-transform: lowercase; }
+.text-capitalize { text-transform: capitalize; }
+.text-decoration-none { text-decoration: none; }
+
+/* Colors */
+.text-primary { color: #1f6bff; }
+.text-secondary { color: #666; }
+.text-success { color: #4caf50; }
+.text-danger { color: #e53935; }
+.text-warning { color: #ff9800; }
+.text-muted { color: #999; }
+.text-white { color: #fff; }
+
+.bg-primary { background: #1f6bff; }
+.bg-secondary { background: #f0f0f0; }
+.bg-success { background: #4caf50; }
+.bg-danger { background: #e53935; }
+.bg-warning { background: #ff9800; }
+
+/* Borders */
+.border { border: 1px solid #ddd; }
+.border-top { border-top: 1px solid #ddd; }
+.border-bottom { border-bottom: 1px solid #ddd; }
+.border-left { border-left: 1px solid #ddd; }
+.border-right { border-right: 1px solid #ddd; }
+.rounded { border-radius: 6px; }
+.rounded-lg { border-radius: 10px; }
+
+/* Width & Height */
+.w-100 { width: 100%; }
+.w-50 { width: 50%; }
+.h-100 { height: 100%; }
+.max-w-100 { max-width: 100%; }
+
+/* Opacity */
+.opacity-50 { opacity: 0.5; }
+.opacity-75 { opacity: 0.75; }
+
+/* Cursor */
+.cursor-pointer { cursor: pointer; }
+.cursor-default { cursor: default; }
+
+/* Position */
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.sticky { position: sticky; }
+.top-0 { top: 0; }
+.left-0 { left: 0; }
+.right-0 { right: 0; }
+.bottom-0 { bottom: 0; }
+
+/* Overflow */
+.overflow-hidden { overflow: hidden; }
+.overflow-auto { overflow: auto; }
+
+/* Shadow */
+.shadow-sm { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+.shadow-md { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
+.shadow-lg { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+
+/* ------------------------------------------------------------------
+ * Fallback rules for a handful of classes already used across content
+ * pages (customers.html, employees.html, etc.) that were never given
+ * a definition anywhere in css/. This is a safe engineering fix, not
+ * a redesign: it makes existing markup render as evidently intended
+ * (a card grid, a horizontally-scrolling table wrapper, a search/filter
+ * row, a circular avatar badge) using the same design tokens
+ * (variables.css) the rest of the app already uses, rather than
+ * introducing any new visual style.
+ * ------------------------------------------------------------------ */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.summary-grid .summary-card {
+  background: #fff;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+.summary-grid .summary-card h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #7b8bab;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.summary-grid .s-val {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color, #1a2233);
+}
+
+/* Filters sit in a single row, each field taking an equal share of
+   the total width (total / however many fields are in this bar) —
+   this is the deliberate, wanted layout. Only wraps to fewer columns
+   on narrow screens, via the media queries below. */
+.filter-bar {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin: 16px 0;
+}
+.filter-bar input,
+.filter-bar select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #dbe1ea;
+  border-radius: 6px;
+  font-size: 14px;
+}
+@media (max-width: 1100px) { .filter-bar { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px)  { .filter-bar { grid-template-columns: repeat(2, 1fr); } }
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--card-color, #fff);
+  backdrop-filter: blur(var(--card-blur, 16px));
+  -webkit-backdrop-filter: blur(var(--card-blur, 16px));
+  border: 1px solid var(--card-border, #e5e9f0);
+  border-radius: 8px;
+}
+
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-color, #4a6cf7);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   BACK NAVIGATION (standardized, per-spec)
+   ============================================================
+   FIX: back links existed on a handful of pages (bank.html,
+   customer-requests.html) as .back-btn — a class with NO shared CSS
+   definition anywhere, so it rendered as a bare browser-default <a>
+   (blue, underlined) rather than the plain-text, no-border,
+   hover-highlight look every sub-page's back link should share.
+   .back-link is the one definition; every sub-page's back link uses
+   this class, never a one-off inline style. Main pages (opened
+   directly from the left menu) should have NO back link at all —
+   this class only ever appears on sub-pages reached FROM a main page.
+*/
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5b6474;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.back-link:hover {
+  color: var(--primary-color, #4a6cf7);
+  background: rgba(74, 108, 247, 0.06);
+}

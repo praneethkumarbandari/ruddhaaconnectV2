@@ -1,0 +1,226 @@
+/* ========================================
+   RUDDHAACONNECT - MODALS & DIALOGS
+   ======================================== */
+
+@import url('variables.css');
+
+/* ══ MODAL OVERLAY ══ */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+/* ══ MODAL DIALOG ══ */
+.modal {
+    display: none;
+    background: var(--card-color);
+    backdrop-filter: blur(var(--card-blur));
+    -webkit-backdrop-filter: blur(var(--card-blur));
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 301;
+    position: relative;
+}
+
+.modal-overlay.active .modal {
+    display: block;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ══ MODAL HEADER ══ */
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #111;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+/* ══ MODAL BODY ══ */
+.modal-body {
+    padding: 20px;
+}
+
+.modal-body p {
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #666;
+    line-height: 1.6;
+}
+
+/* ══ MODAL FOOTER ══ */
+.modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ══ CONFIRMATION DIALOG ══ */
+.confirm-dialog {
+    max-width: 400px;
+}
+
+.confirm-message {
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* ══ TOAST NOTIFICATIONS ══ */
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 400;
+    max-width: 400px;
+}
+
+.toast {
+    background: #fff;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: toastSlideIn 0.3s ease-out;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(400px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.toast.success {
+    border-left: 4px solid #4caf50;
+}
+
+.toast.success .toast-icon {
+    color: #4caf50;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.toast.error {
+    border-left: 4px solid #e53935;
+}
+
+.toast.error .toast-icon {
+    color: #e53935;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.toast.warning {
+    border-left: 4px solid #ff9800;
+}
+
+.toast.warning .toast-icon {
+    color: #ff9800;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.toast.info {
+    border-left: 4px solid #2196f3;
+}
+
+.toast.info .toast-icon {
+    color: #2196f3;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.toast-message {
+    flex: 1;
+    font-size: 13px;
+    color: #333;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast-close:hover {
+    color: #333;
+}

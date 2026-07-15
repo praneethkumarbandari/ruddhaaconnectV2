@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding</title>
+<script>
+            (function () {
+                try {
+                    const cached = localStorage.getItem("portalTheme");
+                    if (cached) {
+                        const t = JSON.parse(cached);
+                        if (t.primary_color)
+                            document.documentElement.style.setProperty(
+                                "--primary-color",
+                                t.primary_color,
+                            );
+                        if (t.secondary_color)
+                            document.documentElement.style.setProperty(
+                                "--secondary-color",
+                                t.secondary_color,
+                            );
+                        if (t.background_color)
+                            document.documentElement.style.setProperty(
+                                "--background-color",
+                                t.background_color,
+                            );
+                        if (t.font_family)
+                            document.documentElement.style.setProperty(
+                                "--font-family",
+                                t.font_family,
+                            );
+                    }
+                } catch (e) {}
+            })();
+        </script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+</style>
+</head>
+<body>
+
+
+            <main class="main">
+                <div class="content-box">
+                    <h1 class="page-title">Onboarding</h1>
+                    <p class="page-subtitle">Company onboarding wizard</p>
+                </div>
+
+                <div class="content-box">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🎯</div>
+                        <h3 class="empty-state-title">Onboarding not available yet</h3>
+                        <p class="empty-state-message">The company onboarding wizard hasn't been built yet. Use <a href="settings.html">Settings</a> to configure your company details in the meantime.</p>
+                    </div>
+                    <table class="data-table" id="OnboardingBodyTable" style="display:none;width:100%;margin-top:16px;">
+                        <thead><tr id="OnboardingBodyHead"></tr></thead>
+                        <tbody id="OnboardingBody"></tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+
+        
+<script>
+            function toggleGroup(el) {
+                const sub = el.nextElementSibling;
+                if (sub && sub.classList.contains("nav-sub")) {
+                    sub.classList.toggle("open");
+                    el.querySelector(".nav-arrow").style.transform = sub.classList.contains("open")
+                        ? "rotate(180deg)"
+                        : "none";
+                }
+            }
+
+            function closeSidebar() {
+                document.getElementById("sidebar").classList.remove("open");
+                document.getElementById("sidebarOverlay").classList.remove("open");
+            }
+
+            function logout() {
+                localStorage.removeItem("rc_token");
+                localStorage.removeItem("rc_user");
+                localStorage.removeItem("loggedEmployee");
+                localStorage.removeItem("authToken");
+                localStorage.removeItem("userData");
+                window.location.href = "business-login.html";
+            }
+
+            // Load theme and company info
+            async function initPage() {
+                try {
+                    // Check session
+                    const sessionData = localStorage.getItem("loggedEmployee");
+                    
+                    if (!sessionData) {
+                        console.log("Redirecting to login...");
+                        window.location.href = "business-login.html";
+                        return;
+                    }
+
+                    const userData = JSON.parse(sessionData);
+                    
+                    if (!userData || !userData.employee_id) {
+                        console.error("❌ Invalid session data");
+                        window.location.href = "business-login.html";
+                        return;
+                    }
+                    (function(){var el=document.getElementById("employeeName");if(el)el.textContent=userData.employeeName || userData.username || "—";})();
+                    (function(){var el=document.getElementById("employeeMeta");if(el)el.textContent=userData.department || "—";})();
+
+                    // Load company logo
+                    if (userData.companyLogo) {
+                        document.getElementById("companyLogo").src = userData.companyLogo;
+                    }
+                } catch (e) {
+                    console.error("❌ Init error:", e);
+                    window.location.href = "business-login.html";
+                }
+            }
+
+            (function(){var el=document.getElementById("sidebarToggle");if(el)el.addEventListener("click", () => {
+                const sidebar = document.getElementById("sidebar");
+                const overlay = document.getElementById("sidebarOverlay");
+                sidebar.classList.toggle("open");
+                overlay.classList.toggle("open");
+            });})();
+
+            initPage();
+        </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/validation.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Journal Entries</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Journal Entries</h2>
+        <button class="btn-primary" onclick="openJournalModal()">＋ New Entry</button>
+    </div>
+    <!--
+      NOTE: the original page modeled journal entries as draft-first
+      with a separate approval/posting step and a manual
+      numbering_sequences lookup done client-side. Accounting V1 has
+      neither: POST /api/journal-entries both creates AND posts in one
+      call (server assigns the JE number), and the only way to correct
+      a posted entry is to reverse it (POST /:id/reverse) — there is
+      no draft state and no delete. Simplified to match.
+    -->
+    <div class="filter-bar">
+        <input type="date" id="fFrom" onchange="loadData()">
+        <input type="date" id="fTo" onchange="loadData()">
+        <input type="text" id="searchInput" placeholder="Search entries…" oninput="filterTable()" style="min-width:200px;">
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>J/E No.</th><th>Date</th><th>Narration</th><th>Status</th><th>Debit (₹)</th><th>Credit (₹)</th><th>Actions</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="journalModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header"><h3>New Journal Entry</h3><button class="modal-header-close" onclick="document.getElementById('journalModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field"><label>Date *</label><input type="date" id="jeDate"></div>
+      </div>
+      <div class="field"><label>Narration *</label><input type="text" id="jeNarration" placeholder="e.g. Office rent for July"></div>
+      <div class="field"><label>Project <span style="font-weight:400;text-transform:none;color:#8a93a6;">(optional)</span></label>
+        <select id="jeProject"><option value="">—</option></select>
+      </div>
+      <table style="margin-top:12px;">
+        <thead><tr><th>Account</th><th>Debit</th><th>Credit</th><th></th></tr></thead>
+        <tbody id="jeLinesBody"></tbody>
+      </table>
+      <button class="btn-secondary" onclick="addJeLine()" style="margin-top:8px;">+ Add Line</button>
+      <p id="jeBalanceMsg" style="margin-top:10px;font-size:13px;"></p>
+    </div>
+    <div class="modal-footer">
+      <span style="font-size:13px;color:#555;">Debit: ₹<span id="jeTotalDebit">0.00</span> &nbsp; Credit: ₹<span id="jeTotalCredit">0.00</span></span>
+      <button class="btn-primary" onclick="saveJournal()">Post Entry</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allRows=[];
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded',async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    const today=new Date().toISOString().split('T')[0];
+    const first=new Date(new Date().getFullYear(),0,1).toISOString().split('T')[0];
+    document.getElementById('fFrom').value=first;document.getElementById('fTo').value=today;
+    setupSidebar();loadData();
+});
+
+async function loadData(){
+    try{
+        const from=document.getElementById('fFrom').value,to=document.getElementById('fTo').value;
+        let path = '/journal-entries';
+        const params = [];
+        if(from) params.push('fromDate='+encodeURIComponent(from));
+        if(to) params.push('toDate='+encodeURIComponent(to));
+        if(params.length) path += '?'+params.join('&');
+        allRows = await window.Api.get(path);
+        renderTable(allRows);
+    }catch(e){document.getElementById('tableBody').innerHTML='<tr><td colspan="7" class="empty-state">Could not load journal entries: '+(e.message||'Unknown error')+'</td></tr>';}
+}
+function filterTable(){const q=document.getElementById('searchInput').value.toLowerCase();renderTable(q?allRows.filter(r=>JSON.stringify(r).toLowerCase().includes(q)):allRows);}
+function renderTable(rows){
+    const tbody=document.getElementById('tableBody');
+    if(!rows.length){tbody.innerHTML='<tr><td colspan="7" class="empty-state">No journal entries found for this period.</td></tr>';return;}
+    tbody.innerHTML=rows.map(r=>{
+        const total = (r.lines||[]).reduce((s,l)=>s+(parseFloat(l.debit)||0),0);
+        return `<tr>
+        <td><span class="je-no">${r.je_no||'—'}</span></td>
+        <td>${r.entry_date?new Date(r.entry_date).toLocaleDateString('en-IN'):'—'}</td>
+        <td>${escapeHtml(r.narration)||'—'}</td>
+        <td><span class="badge">${r.status}</span></td>
+        <td class="debit-amt">₹${fmt(total)}</td>
+        <td class="credit-amt">₹${fmt(total)}</td>
+        <td>${r.status==='posted'&&!r.reversed_by_je_id?`<button class="action-btn" onclick="reverseEntry('${r.id}')"><i class="fa-solid fa-rotate-left"></i> Reverse</button>`:(r.reversed_by_je_id?'<span style="color:#888;font-size:12px;">Reversed</span>':'—')}</td>
+    </tr>`;}).join('');
+}
+async function reverseEntry(id){
+    const reason = prompt('Reason for reversal:');
+    if(reason===null) return;
+    if(!reason.trim()){ alert('A reason is required.'); return; }
+    try{
+        await window.Api.post('/journal-entries/'+id+'/reverse', { reason: reason.trim() });
+        loadData();
+    }catch(e){ alert('Could not reverse: '+(e.message||'Unknown error')); }
+}
+
+let jeLines=[], jeLedgers=[], jeProjects=[];
+async function openJournalModal(){
+    document.getElementById('jeDate').valueAsDate=new Date();
+    document.getElementById('jeNarration').value='';
+    document.getElementById('jeProject').value='';
+    jeLines=[{ledgerIdx:'',debit:0,credit:0},{ledgerIdx:'',debit:0,credit:0}];
+    if(!jeLedgers.length){
+        // FIX (menu/UX restructure): this used to list raw chart-of-accounts
+        // rows, including one single undifferentiated "Sundry Debtors"/
+        // "Sundry Creditors" line — picking that told you nothing about
+        // WHICH customer or vendor the entry actually belongs to. /ledgers
+        // returns the real, postable list instead: ordinary COA accounts,
+        // plus one row per customer, one per vendor, one per real bank
+        // account — see src/lib/ledgers.ts.
+        try{ jeLedgers = await window.Api.get('/ledgers'); }
+        catch(e){ jeLedgers = []; alert('Could not load ledgers: '+(e.message||'Unknown error')+'. The account dropdown will be empty until this is fixed.'); }
+    }
+    if(!jeProjects.length){
+        // FIX (Project Reports gap): postJournalEntry() already accepts a
+        // projectId end to end (see src/lib/posting-engine.ts and its
+        // reversal-inherits-project fix), but this form never asked for
+        // one — Revenue/Cash Flow project reports had nothing to filter
+        // by for any manual journal entry. Same optional-dropdown pattern
+        // now used on Create Invoice and already used by Costing.
+        try{ jeProjects = await window.Api.get('/projects'); }
+        catch(e){ jeProjects = []; }
+        document.getElementById('jeProject').innerHTML = '<option value="">—</option>' +
+            jeProjects.map(p=>`<option value="${p.id}">${escapeHtml(p.project_code||p.id)} — ${escapeHtml(p.project_name||'')}</option>`).join('');
+    }
+    renderJeLines();
+    document.getElementById('journalModal').classList.add('active');
+}
+function renderJeLines(){
+    document.getElementById('jeLinesBody').innerHTML=jeLines.map((l,i)=>`<tr>
+        <td><select data-idx="${i}" data-field="ledgerIdx" style="width:100%;padding:6px;">
+            <option value="">Select ledger…</option>
+            ${jeLedgers.map((led,li)=>`<option value="${li}" ${String(l.ledgerIdx)===String(li)?'selected':''}>${escapeHtml(led.label)}</option>`).join('')}
+        </select></td>
+        <td><input type="number" value="${l.debit||''}" min="0" step="0.01" style="width:100%;padding:6px;" data-idx="${i}" data-field="debit"></td>
+        <td><input type="number" value="${l.credit||''}" min="0" step="0.01" style="width:100%;padding:6px;" data-idx="${i}" data-field="credit"></td>
+        <td><button data-remove="${i}" style="background:none;border:0;color:#c0392b;cursor:pointer;"><i class="fa-solid fa-trash"></i> </button></td>
+    </tr>`).join('');
+    updateJeTotals();
+}
+function updateJeTotals(){
+    const td=jeLines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0);
+    const tc=jeLines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0);
+    document.getElementById('jeTotalDebit').textContent=td.toFixed(2);
+    document.getElementById('jeTotalCredit').textContent=tc.toFixed(2);
+    const msg=document.getElementById('jeBalanceMsg');
+    if(Math.abs(td-tc)>0.01){ msg.textContent='⚠️ Not balanced — Debit must equal Credit before this can be posted.'; msg.style.color='#c0392b'; }
+    else if(td===0){ msg.textContent='Enter at least one debit and one credit line.'; msg.style.color='#888'; }
+    else { msg.textContent='✓ Balanced'; msg.style.color='#1a8843'; }
+}
+document.addEventListener('input', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    const field = e.target.getAttribute('data-field');
+    if(idx===null || !field) return;
+    if(field==='ledgerIdx'){ jeLines[idx].ledgerIdx = e.target.value; return; }
+    const val = parseFloat(e.target.value)||0;
+    jeLines[idx][field] = val;
+    if(field==='debit' && val>0) jeLines[idx].credit = 0;
+    if(field==='credit' && val>0) jeLines[idx].debit = 0;
+    updateJeTotals();
+});
+document.addEventListener('change', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    if(idx!==null && e.target.getAttribute('data-field')==='ledgerIdx'){ jeLines[idx].ledgerIdx = e.target.value; }
+});
+document.addEventListener('click', function(e){
+    const removeIdx = e.target.getAttribute('data-remove');
+    if(removeIdx!==null){ jeLines.splice(parseInt(removeIdx),1); renderJeLines(); }
+});
+function addJeLine(){ jeLines.push({ledgerIdx:'',debit:0,credit:0}); renderJeLines(); }
+
+async function saveJournal(){
+    const entryDate=document.getElementById('jeDate').value;
+    const narration=document.getElementById('jeNarration').value.trim();
+    if(!entryDate||!narration){ alert('Date and narration are required.'); return; }
+    const validLines=jeLines.filter(l=>l.ledgerIdx!==''&&(l.debit>0||l.credit>0));
+    if(validLines.length<2){ alert('At least two lines are required (one debit, one credit).'); return; }
+    const td=validLines.reduce((s,l)=>s+(parseFloat(l.debit)||0),0);
+    const tc=validLines.reduce((s,l)=>s+(parseFloat(l.credit)||0),0);
+    if(Math.abs(td-tc)>0.01){ alert('Debit and Credit totals must be equal. Cannot post an unbalanced journal entry.'); return; }
+    try{
+        const result = await window.Api.post('/journal-entries', {
+            entryDate, narration,
+            projectId: document.getElementById('jeProject').value || null,
+            lines: validLines.map(l=>{
+                const led = jeLedgers[Number(l.ledgerIdx)];
+                return { accountCode: led.accountCode, partyType: led.partyType, partyId: led.partyId, debit: l.debit||0, credit: l.credit||0 };
+            }),
+        });
+        document.getElementById('journalModal').classList.remove('active');
+        alert('Journal '+(result.je_no||result.id)+' posted.');
+        loadData();
+    }catch(e){ alert('Could not post journal entry: '+(e.message||'Unknown error')); }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

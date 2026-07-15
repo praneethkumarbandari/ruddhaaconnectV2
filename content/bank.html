@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bank Transactions</title>
+<script>
+(function(){
+try {
+const cached = localStorage.getItem('portalTheme');
+if(cached){
+try {
+const parsed = JSON.parse(cached);
+if(parsed.primary_color) document.documentElement.style.setProperty('--primary-color', parsed.primary_color);
+const rgb = parsed.primary_color.replace(/^#/, '');
+if(rgb.length === 6) {
+const r = parseInt(rgb.substring(0,2), 16);
+const g = parseInt(rgb.substring(2,4), 16);
+const b = parseInt(rgb.substring(4,6), 16);
+document.documentElement.style.setProperty('--primary-color-rgb', `${r},${g},${b}`);
+}
+if(parsed.secondary_color) document.documentElement.style.setProperty('--secondary-color', parsed.secondary_color);
+if(parsed.background_color) document.documentElement.style.setProperty('--background-color', parsed.background_color);
+if(parsed.font_family) document.documentElement.style.setProperty('--font-family', parsed.font_family);
+} catch(e){
+localStorage.removeItem("portalTheme");
+}
+}
+} catch(e){}
+})();
+    function applyTheme(t) {
+        if (!t) return;
+        if(t.primary_color) {
+            document.documentElement.style.setProperty('--primary-color', t.primary_color);
+            const rgb = t.primary_color.replace(/^#/, '');
+            if(rgb.length === 6) {
+                const r = parseInt(rgb.substring(0,2), 16);
+                const g = parseInt(rgb.substring(2,4), 16);
+                const b = parseInt(rgb.substring(4,6), 16);
+                document.documentElement.style.setProperty('--primary-color-rgb', `${r},${g},${b}`);
+            }
+        }
+        if(t.secondary_color) document.documentElement.style.setProperty('--secondary-color', t.secondary_color);
+        if(t.background_color) document.documentElement.style.setProperty('--background-color', t.background_color);
+        if(t.font_family) document.documentElement.style.setProperty('--font-family', t.font_family);
+        
+        const cName = document.getElementById("companyName");
+        if(cName) cName.textContent = t.company_name || "RuddhaConnect";
+        
+        const logo = document.getElementById("companyLogo");
+        if(logo) {
+            if(t.logo_path && t.logo_path.trim()){
+                logo.src = t.logo_path.trim();
+                logo.onload = () => { logo.style.display = "block"; };
+                logo.onerror = () => { logo.style.display = "none"; };
+            } else {
+                logo.style.display = "none";
+            }
+        }
+    }
+</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-title > span { font-size: 20px; font-weight: 700; }
+  .status-grid { display: flex; gap: 16px; margin-bottom: 20px; }
+  .status-card { flex: 1; background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px)); border: 1px solid var(--card-border, #eee); border-radius: 10px; padding: 16px; }
+  .status-card h4 { margin: 0 0 6px; font-size: 12px; color: #8a93a6; text-transform: uppercase; letter-spacing: 0.03em; }
+  .status-card .stat-val { font-size: 22px; font-weight: 700; }
+  .import-row { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+  @media (max-width: 700px) { .status-grid { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+
+  <!-- MAIN -->
+  <main class="main" id="mainArea">
+    <div id="errorState" style="display:none">
+      <p>⚠️ Session not found. Redirecting to login...</p>
+    </div>
+    <div id="dashContent">
+      <div class="back-btn-container">
+        <a href="bank-transactions.html" class="back-link" target="_top">← Back to Bank &amp; Cash Accounts</a>
+      </div>
+      <div class="section-title">
+        <span id="bankTitle">🏦 Bank Account</span>
+        <div>
+          <button class="btn btn-secondary" id="bankLoginBtn" style="display:none;" onclick="openBankLogin()"><i class="fa-solid fa-lock"></i> Login to Bank</button>
+        </div>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-card"><h4>Opening Balance</h4><div class="stat-val" id="statOpening">0</div></div>
+        <div class="status-card"><h4>Total Debits</h4><div class="stat-val" id="statDebits">0</div></div>
+        <div class="status-card"><h4>Total Credits</h4><div class="stat-val" id="statCredits">0</div></div>
+        <div class="status-card"><h4>Closing Balance</h4><div class="stat-val" id="statClosing">0</div></div>
+      </div>
+
+      <div class="import-row">
+        <button class="btn btn-primary" onclick="document.getElementById('importFile').click()"><i class="fa-solid fa-upload"></i> Import Statement</button>
+        <input type="file" id="importFile" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleImportFile(event)">
+      </div>
+
+      <div id="importPreview" style="display:none;margin:16px 0;padding:16px;background:#fff;border:1px solid #dbe1ea;border-radius:8px;">
+        <h4 style="margin-bottom:10px;">Map columns from your file, then import</h4>
+        <div id="importMapFields" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div style="max-height:220px;overflow:auto;border:1px solid #eee;">
+          <table class="data-table" id="importPreviewTable" style="font-size:12px;"></table>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" onclick="confirmImport()">Import Rows</button>
+          <button class="btn btn-secondary" onclick="cancelImport()">Cancel</button>
+          <span id="importStatus" style="margin-left:10px;color:#1f6bff;"></span>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <input type="text" class="search-input" id="txnSearch" placeholder="Search description / reference..." oninput="renderTxnTable()">
+        <select class="filter-select" id="mapStatusFilter" onchange="renderTxnTable()">
+          <option value="">All Mapping Status</option>
+          <option value="Unmapped">Unmapped</option>
+          <option value="Mapped">Mapped</option>
+          <option value="Posted">Posted</option>
+        </select>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Description</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Balance</th>
+              <th>Mapping</th><th>Mapped To</th><th>Status</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="txnTableBody">
+            <tr><td colspan="10" style="text-align:center;padding:20px;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+<!-- Bank Account Modal -->
+<div class="modal-overlay" id="bankAccountModal">
+    <div class="modal">
+        <h3>Add Bank Account</h3>
+        <div class="form-group">
+            <label>Account Type</label>
+            <select class="form-control" id="accType" onchange="toggleBankFields()">
+                <option value="Cash">Cash</option>
+                <option value="Petty Cash">Petty Cash</option>
+                <option value="Savings Account">Savings Account</option>
+                <option value="Current Account">Current Account</option>
+                <option value="OD">OD</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Wallet">Wallet</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Account Name</label>
+            <input type="text" class="form-control" id="accName">
+        </div>
+        <div class="form-group">
+            <label>Opening Balance</label>
+            <input type="number" class="form-control" id="accOpeningBalance">
+        </div>
+        <div class="form-group">
+            <label>Ledger Account</label>
+            <select class="form-control" id="ledgerAccountCode">
+                <option value="">Select ledger account…</option>
+            </select>
+        </div>
+        <div class="form-group" id="bankNameGroup" style="display:none;">
+            <label>Bank Name</label>
+            <input type="text" class="form-control" id="bankName">
+        </div>
+        <div class="form-group" id="accountNumberGroup" style="display:none;">
+            <label>Account Number</label>
+            <input type="text" class="form-control" id="accountNumber">
+        </div>
+        <div class="form-group" id="ifscGroup" style="display:none;">
+            <label>IFSC</label>
+            <input type="text" class="form-control" id="ifsc">
+        </div>
+        <div class="form-group" id="limitAmountGroup" style="display:none;">
+            <label>Limit Amount</label>
+            <input type="number" class="form-control" id="limitAmount">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeBankAccountModal()">Close</button>
+            <button class="btn btn-primary" onclick="saveBankAccount()">Save</button>
+        </div>
+    </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script>
+    const db = window.db;
+
+    // Navigation Logic
+    function toggleGroup(el){
+        const isOpen = el.classList.contains("open");
+        // Close all groups
+        document.querySelectorAll(".nav-group-toggle").forEach(function(toggle){
+            toggle.classList.remove("open");
+            const sub = toggle.nextElementSibling;
+            if(sub && sub.classList.contains("nav-sub")) sub.classList.remove("open");
+        });
+        // Open clicked group if it was closed
+        if(!isOpen){
+            el.classList.add("open");
+            const sub = el.nextElementSibling;
+            if(sub && sub.classList.contains("nav-sub")) sub.classList.add("open");
+        }
+    }
+
+    const sidebar = document.getElementById("sidebar");
+    const mainArea = document.getElementById("mainArea");
+    const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+    (function(){var el=document.getElementById("sidebarToggle");if(el)el.addEventListener("click", () => {
+        if(window.innerWidth <= 900){
+            sidebar.classList.toggle("mobile-open");
+            sidebarOverlay.classList.toggle("active");
+        } else {
+            sidebar.classList.toggle("collapsed");
+            mainArea.classList.toggle("expanded");
+        }
+    });})();
+
+    function closeSidebar(){
+        sidebar.classList.remove("mobile-open");
+        sidebarOverlay.classList.remove("active");
+    }
+
+    // Theme Loading Logic
+    async function loadTheme(){
+        const cached = localStorage.getItem('portalTheme');
+        if(cached){
+            try {
+                const parsed = JSON.parse(cached);
+                applyTheme(parsed);
+            } catch(e){
+                localStorage.removeItem("portalTheme");
+            }
+        }
+        try {
+            const { data, error } = await db.from("portal_config").select("*").limit(1).maybeSingle();
+            if(data && !error){
+                localStorage.setItem("portalTheme", JSON.stringify(data));
+                applyTheme(data);
+            }
+        } catch(e){}
+    }
+
+    // Auth Logic
+    function loadSession(){
+        const stored = localStorage.getItem("loggedEmployee");
+        if(!stored){
+            window.location.href = "business-login.html";
+            return null;
+        }
+        return JSON.parse(stored);
+    }
+
+    function logout(){
+        localStorage.removeItem("loggedEmployee");
+        window.location.href = "business-login.html";
+    }
+
+    // Known netbanking login URLs — matched against the account's bank_name.
+    // Not exhaustive; falls back to a Google search if the bank isn't listed.
+    const BANK_LOGIN_URLS = {
+        "state bank of india": "https://retail.onlinesbi.sbi/retail/login.htm",
+        "sbi": "https://retail.onlinesbi.sbi/retail/login.htm",
+        "hdfc": "https://netbanking.hdfcbank.com/netbanking/",
+        "icici": "https://www.icicibank.com/login.page",
+        "axis": "https://www.axisbank.com/revamp/login-check",
+        "kotak": "https://netbanking.kotak.com/knb2/",
+        "punjab national bank": "https://netbanking.pnbindia.in/",
+        "pnb": "https://netbanking.pnbindia.in/",
+        "bank of baroda": "https://www.bobibanking.com/",
+        "canara": "https://netbanking.canarabank.in/",
+        "union bank": "https://www.unionbankonline.co.in/",
+        "indian bank": "https://www.indianbank.net.in/",
+        "idbi": "https://inet.idbi.co.in/",
+        "yes bank": "https://login.yesbank.in/",
+        "indusind": "https://mybank.indusind.com/",
+        "federal bank": "https://fedbook.federalbank.co.in/",
+    };
+
+    let currentAccount = null;
+    let allTxns = [];
+    let importParsedRows = [];
+    let importFileHeaders = [];
+    let cachedCustomers=[], cachedVendors=[], cachedCoa=[];
+
+    async function loadLookups(){
+        // Architecture migration: all three lookups now come from the
+        // real Express API instead of direct Supabase calls.
+        // chart_of_accounts returns account_code/account_name (not code/name)
+        // so we normalize at the boundary, same way inventory.html does it.
+        const [customers, vendors, coaRows] = await Promise.all([
+            window.Api.get('/customers').catch(()=>[]),
+            window.Api.get('/vendors').catch(()=>[]),
+            window.Api.get('/chart-of-accounts').catch(()=>[]),
+        ]);
+        cachedCustomers = customers || [];
+        cachedVendors = vendors || [];
+        // Normalize to code/name for the dropdown rendering already in place
+        cachedCoa = (coaRows||[]).filter(a=>a.is_active!==false).map(a=>({
+            code: a.account_code,
+            name: a.account_name,
+        }));
+    }
+
+    function bankIdFromUrl(){
+        const params = new URLSearchParams(window.location.search);
+        return params.get("id");
+    }
+
+    async function loadAccount(){
+        const id = bankIdFromUrl();
+        if(!id){ document.getElementById("bankTitle").textContent = "⚠️ No bank account specified"; return; }
+        try{
+            const data = await window.Api.get('/bank-accounts/accounts/' + id);
+            currentAccount = data;
+            document.getElementById("bankTitle").textContent = "🏦 " + (data.account_name||"Bank Account") + " — " + (data.bank_name||data.account_type||"");
+            const key = (data.bank_name||"").toLowerCase().trim();
+            const loginUrl = BANK_LOGIN_URLS[key] || Object.keys(BANK_LOGIN_URLS).find(k=>key.includes(k));
+            const btn = document.getElementById("bankLoginBtn");
+            if(data.bank_name){ btn.style.display="inline-block"; btn.dataset.url = BANK_LOGIN_URLS[key] || (typeof loginUrl==='string'&&BANK_LOGIN_URLS[loginUrl]) || ("https://www.google.com/search?q="+encodeURIComponent(data.bank_name+" netbanking login")); }
+            loadTxns();
+        }catch(e){
+            document.getElementById("bankTitle").textContent = "⚠️ Could not load account";
+        }
+    }
+
+    function openBankLogin(){
+        const url = document.getElementById("bankLoginBtn").dataset.url;
+        if(url) window.open(url, "_blank");
+    }
+
+    // ============================================================
+    // ADD BANK ACCOUNT MODAL — this modal's markup (Save/Close buttons)
+    // existed on this page with no JS behind it at all: no opener, no
+    // closeBankAccountModal(), no saveBankAccount(), no toggleBankFields()
+    // — every button here threw a ReferenceError and did nothing.
+    // Ported from the working implementation in bank-transactions.html
+    // (same modal, same required Ledger Account mapping) so both pages
+    // behave identically instead of drifting into two versions.
+    // ============================================================
+    async function openBankAccountModal(){
+        await populateLedgerAccountOptions();
+        document.getElementById("bankAccountModal").classList.add("active");
+        toggleBankFields();
+    }
+
+    async function populateLedgerAccountOptions(){
+        const sel = document.getElementById("ledgerAccountCode");
+        if(sel.options.length > 1) return;
+        try{
+            const data = await window.Api.get('/chart-of-accounts');
+            (data||[]).filter(a=>a.is_active!==false).forEach(a=>{
+                const opt=document.createElement("option");
+                opt.value=a.account_code; opt.textContent=a.account_name+" ("+a.account_code+")";
+                sel.appendChild(opt);
+            });
+        }catch(e){}
+    }
+
+    function closeBankAccountModal(){
+        document.getElementById("bankAccountModal").classList.remove("active");
+        resetBankAccountForm();
+    }
+
+    function resetBankAccountForm(){
+        document.getElementById("accType").value = "Cash";
+        document.getElementById("accName").value = "";
+        document.getElementById("accOpeningBalance").value = "";
+        document.getElementById("bankName").value = "";
+        document.getElementById("accountNumber").value = "";
+        document.getElementById("ifsc").value = "";
+        document.getElementById("limitAmount").value = "";
+        document.getElementById("ledgerAccountCode").value = "";
+        toggleBankFields();
+    }
+
+    function toggleBankFields(){
+        const accType = document.getElementById("accType").value;
+        const showBankFields = ["Savings Account", "Current Account", "OD", "Credit Card"].includes(accType);
+        const showLimitAmount = ["OD", "Credit Card"].includes(accType);
+        document.getElementById("bankNameGroup").style.display = showBankFields ? "block" : "none";
+        document.getElementById("accountNumberGroup").style.display = showBankFields ? "block" : "none";
+        document.getElementById("ifscGroup").style.display = showBankFields ? "block" : "none";
+        document.getElementById("limitAmountGroup").style.display = showLimitAmount ? "block" : "none";
+    }
+
+    async function saveBankAccount(){
+        const accType = document.getElementById("accType").value;
+        const accName = document.getElementById("accName").value;
+        const accOpeningBalance = document.getElementById("accOpeningBalance").value;
+        const ledgerCode = document.getElementById("ledgerAccountCode").value;
+
+        if (!accName || !accOpeningBalance) {
+            alert("Please fill in Account Name and Opening Balance");
+            return;
+        }
+        if (!ledgerCode) {
+            alert("Select a Ledger Account — every bank account must map to a Chart of Accounts ledger before its transactions can be posted.");
+            return;
+        }
+
+        const bankAccountData = {
+            accountType: accType,
+            accountName: accName,
+            openingBalance: parseFloat(accOpeningBalance),
+            ledgerAccountCode: ledgerCode,
+        };
+        if (["Savings Account", "Current Account", "OD", "Credit Card"].includes(accType)) {
+            bankAccountData.bankName = document.getElementById("bankName").value;
+            bankAccountData.accountNumber = document.getElementById("accountNumber").value;
+            bankAccountData.ifsc = document.getElementById("ifsc").value;
+        }
+
+        try {
+            await window.Api.post('/bank-accounts/accounts', bankAccountData);
+            alert("Bank account added successfully!");
+            closeBankAccountModal();
+            window.location.href = "bank-transactions.html";
+        } catch(err) {
+            alert("Error saving bank account: " + err.message);
+        }
+    }
+
+    async function loadTxns(){
+        const id = bankIdFromUrl();
+        try{
+            const data = await window.Api.get('/bank-accounts/accounts/' + id + '/transactions');
+            allTxns = data || [];
+            const opening = parseFloat(currentAccount && currentAccount.opening_balance) || 0;
+            const debits = allTxns.reduce((s,t)=>s+(parseFloat(t.debit)||0),0);
+            const credits = allTxns.reduce((s,t)=>s+(parseFloat(t.credit)||0),0);
+            document.getElementById("statOpening").textContent = opening.toLocaleString("en-IN");
+            document.getElementById("statDebits").textContent = debits.toLocaleString("en-IN");
+            document.getElementById("statCredits").textContent = credits.toLocaleString("en-IN");
+            document.getElementById("statClosing").textContent = (opening+credits-debits).toLocaleString("en-IN");
+            renderTxnTable();
+        }catch(e){
+            document.getElementById("txnTableBody").innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#c0392b;">Could not load transactions.</td></tr>';
+        }
+    }
+
+    const MAPPING_TYPES = ["Customer","Vendor","Expense","Income","Transfer","Loan","Capital","Adjustment"];
+
+    function parseMappedTo(mappedTo){
+        const parts=(mappedTo||"").split(":");
+        return { type: parts[0]||"", refId: parts[1]||"", label: parts.slice(2).join(":").trim() };
+    }
+
+    function renderTxnTable(){
+        const q = (document.getElementById("txnSearch").value||"").toLowerCase();
+        const statusFilter = document.getElementById("mapStatusFilter").value;
+        const rows = allTxns.filter(t=>{
+            if(statusFilter && (t.mapping_status||"Unmapped")!==statusFilter) return false;
+            if(q && !((t.description||"").toLowerCase().includes(q) || (t.reference_no||"").toLowerCase().includes(q))) return false;
+            return true;
+        });
+        const body = document.getElementById("txnTableBody");
+        if(!rows.length){ body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#888;">No transactions found.</td></tr>'; return; }
+        body.innerHTML = rows.map(t=>{
+            const status = t.mapping_status||"Unmapped";
+            const locked = status==="Posted";
+            const parsed = parseMappedTo(t.mapped_to);
+            const typeOptions = MAPPING_TYPES.map(m=>`<option value="${m}" ${parsed.type===m?"selected":""}>${m}</option>`).join("");
+            return `<tr>
+                <td>${t.transaction_date?new Date(t.transaction_date).toLocaleDateString("en-IN"):"—"}</td>
+                <td>${t.description||""}</td>
+                <td>${t.reference_no||""}</td>
+                <td>${t.debit?parseFloat(t.debit).toLocaleString("en-IN"):""}</td>
+                <td>${t.credit?parseFloat(t.credit).toLocaleString("en-IN"):""}</td>
+                <td>${t.balance?parseFloat(t.balance).toLocaleString("en-IN"):""}</td>
+                <td>${locked?parsed.type:
+                    `<select id="mapType${t.id}" style="padding:4px;" onchange="onMapTypeChange(${t.id})">
+                        <option value="">Select…</option>${typeOptions}
+                    </select>`}</td>
+                <td id="mapToCell${t.id}">${locked?parsed.label:renderMapToControl(t.id,parsed)}</td>
+                <td><span class="badge ${status.toLowerCase()}">${status}</span></td>
+                <td>${locked?"—":
+                    (status==="Mapped"
+                        ? `<button class="action-btn" onclick="postTxn(${t.id})">Post</button>`
+                        : `<button class="action-btn" onclick="saveMapping(${t.id})">Save Mapping</button>`)}
+                </td>
+            </tr>`;
+        }).join("");
+    }
+
+    function renderMapToControl(id, parsed){
+        if(parsed.type==="Customer"){
+            return `<select id="mapTo${id}" style="padding:4px;width:160px;">
+                <option value="">Select customer…</option>
+                ${cachedCustomers.map(c=>`<option value="${c.id}" ${String(parsed.refId)===String(c.id)?"selected":""}>${c.customer_name}</option>`).join("")}
+            </select>`;
+        }
+        if(parsed.type==="Vendor"){
+            return `<select id="mapTo${id}" style="padding:4px;width:160px;">
+                <option value="">Select vendor…</option>
+                ${cachedVendors.map(v=>`<option value="${v.id}" ${String(parsed.refId)===String(v.id)?"selected":""}>${v.vendor_name}</option>`).join("")}
+            </select>`;
+        }
+        if(parsed.type){
+            return `<select id="mapTo${id}" style="padding:4px;width:160px;">
+                <option value="">Select ledger account…</option>
+                ${cachedCoa.map(a=>`<option value="${a.code}" ${parsed.refId===a.code?"selected":""}>${a.name} (${a.code})</option>`).join("")}
+            </select>`;
+        }
+        return `<span style="color:#aaa;font-size:12px;">Select a type first</span>`;
+    }
+
+    function onMapTypeChange(id){
+        const type = document.getElementById("mapType"+id).value;
+        document.getElementById("mapToCell"+id).innerHTML = renderMapToControl(id, {type, refId:"", label:""});
+    }
+
+    async function saveMapping(id){
+        const type = document.getElementById("mapType"+id).value;
+        const sel = document.getElementById("mapTo"+id);
+        const refId = sel ? sel.value : "";
+        if(!type || !refId){ alert("Select a mapping type and the specific party/account."); return; }
+        const label = sel.options[sel.selectedIndex].text;
+        try{
+            await window.Api.post('/bank-accounts/transactions/' + id + '/map', {
+                mappedTo: type+":"+refId+":"+label
+            });
+            await loadTxns();
+        }catch(e){ alert("Could not save mapping: "+e.message); }
+    }
+
+    async function getAccountByCode(code){
+        // Read from cachedCoa (already loaded by loadLookups) to avoid
+        // an extra network round-trip per row during table rendering.
+        if(!code) return null;
+        return cachedCoa.find(a=>a.code===code) || null;
+    }
+
+    // checkPeriodOpen: the server now enforces this via requireOpenFinancialYear()
+    // inside postJournalEntry / createDraftReceipt / createDraftPayment; the
+    // client-side check here is kept as a fast UX pre-flight that avoids a
+    // round-trip for an obviously-wrong date, but it no longer queries
+    // financial_years directly — it reads the cached FY list from the API.
+    async function checkPeriodOpen(dateStr){
+        if(!dateStr) return true;
+        try {
+            const fys = await window.Api.get('/financial-years');
+            const fy = (fys||[]).find(f => f.start_date <= dateStr && f.end_date >= dateStr);
+            if(fy && fy.is_closed){
+                alert('Cannot post: the financial year "'+fy.name+'" covering '+dateStr+' is closed. Reopen it in Financial Years settings, or use a date in an open period.');
+                return false;
+            }
+        } catch(e){ /* pre-flight best-effort, server enforces authoritatively */ }
+        return true;
+    }
+
+    async function postTxn(id){
+        const txn = allTxns.find(t=>t.id===id);
+        if(!txn) return;
+        const currentEmp = window.Auth.getEmployee();
+        if(!currentEmp || !currentEmp.can_approve){
+            alert('You do not have posting/approval rights. Contact your administrator.');
+            return;
+        }
+        const parsed = parseMappedTo(txn.mapped_to);
+        if(!(await checkPeriodOpen(txn.transaction_date))) return;
+
+        if(parsed.type==="Customer" || parsed.type==="Vendor"){
+            openAllocationModal(txn, parsed);
+            return;
+        }
+
+        if(!confirm("Post this transaction? A journal entry will be created and cannot be undone.")) return;
+        try{
+            // Architecture migration: postGenericJournal previously wrote
+            // directly to journal_entries/journal_entry_lines/numbering_sequences
+            // using a completely different column shape (journal_no, a column
+            // that doesn't even exist on the real schema). Now delegates to
+            // POST /api/bank-accounts/transactions/:id/post which calls the
+            // real postJournalEntry() in the posting engine — one accounting
+            // system, one set of tables.
+            const result = await window.Api.post('/bank-accounts/transactions/' + id + '/post', {});
+            if(window.Audit) window.Audit.log('bank_transactions', txn.id, 'POST', {mapping_status:txn.mapping_status}, {mapping_status:'Posted', je_no: result.jeNo});
+            alert("Posted. Journal " + result.jeNo + " created.");
+            loadTxns();
+        }catch(e){ alert("Posting failed: "+e.message); }
+    }
+
+    // postGenericJournal is no longer a client-side function — it now
+    // lives in src/lib/bank-accounts.ts as postGenericBankTransaction(),
+    // called exclusively through POST /api/bank-accounts/transactions/:id/post.
+    // Keeping this comment so anyone grepping for this function name in
+    // the git history understands where it went.
+
+    // ============ RECEIPT / PAYMENT ALLOCATION ============
+    let allocationCtx = null;
+
+    async function openAllocationModal(txn, parsed){
+        const isCustomer = parsed.type==="Customer";
+        const partyType = isCustomer ? "customer" : "vendor";
+        const amt = parseFloat(txn.debit)||parseFloat(txn.credit)||0;
+        // Architecture migration: open invoices with real outstanding
+        // balances come from /api/bank-accounts/parties/:type/:id/open-invoices,
+        // which reads receipt_allocations / payment_allocations from the
+        // REAL receipts/payments tables — not the legacy invoices table that
+        // bank.html previously queried with .eq("party_type","customer").
+        const openInvoices = await window.Api.get(
+            '/bank-accounts/parties/' + partyType + '/' + parsed.refId + '/open-invoices'
+        ).catch(()=>[]);
+        allocationCtx = { txn, parsed, isCustomer, amt, openInvoices };
+        renderAllocationModal();
+    }
+
+    function renderAllocationModal(){
+        const { txn, parsed, isCustomer, amt, openInvoices } = allocationCtx;
+        let modal = document.getElementById("allocModal");
+        if(!modal){
+            modal = document.createElement("div");
+            modal.id = "allocModal";
+            modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;display:flex;align-items:center;justify-content:center;";
+            document.body.appendChild(modal);
+        }
+        const rows = openInvoices.map(inv => `<tr>
+            <td>${inv.invoice_no||inv.purchase_no||'—'}</td><td>${inv.invoice_date||inv.purchase_date?new Date(inv.invoice_date||inv.purchase_date).toLocaleDateString("en-IN"):""}</td>
+            <td>${(inv.total_amount||0).toLocaleString("en-IN")}</td><td>${inv.outstanding.toLocaleString("en-IN")}</td>
+            <td><input type="number" id="alloc_${inv.id}" min="0" max="${inv.outstanding}" step="0.01" style="width:100px;" oninput="updateAllocTotal()"></td>
+        </tr>`).join("");
+        modal.innerHTML = `<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:85vh;overflow:auto;">
+            <h3 style="margin-bottom:6px;">${isCustomer?"Receipt":"Payment"} — ${parsed.label}</h3>
+            <p style="color:#7b8bab;font-size:13px;margin-bottom:14px;">Transaction amount: ₹${amt.toLocaleString("en-IN")}. Allocate against outstanding ${isCustomer?"invoices":"purchase invoices"} below. Any unallocated amount is recorded as an advance.</p>
+            ${openInvoices.length ? `<table class="data-table" style="font-size:12px;"><thead><tr><th>Doc No.</th><th>Date</th><th>Total</th><th>Outstanding</th><th>Allocate</th></tr></thead><tbody>${rows}</tbody></table>`
+                : `<p style="color:#888;">No outstanding ${isCustomer?"invoices":"purchase invoices"} for this party. The full amount will be recorded as an advance.</p>`}
+            <div style="margin-top:14px;font-weight:600;">Allocated: ₹<span id="allocTotalDisplay">0.00</span> of ₹${amt.toLocaleString("en-IN")}</div>
+            <div style="margin-top:16px;display:flex;gap:10px;">
+                <button class="btn btn-primary" onclick="confirmAllocation()">Confirm &amp; Post</button>
+                <button class="btn btn-secondary" onclick="closeAllocationModal()">Cancel</button>
+            </div>
+        </div>`;
+    }
+
+    function updateAllocTotal(){
+        const { openInvoices } = allocationCtx;
+        let total = 0;
+        openInvoices.forEach(inv=>{ const el=document.getElementById("alloc_"+inv.id); if(el) total += parseFloat(el.value)||0; });
+        document.getElementById("allocTotalDisplay").textContent = total.toFixed(2);
+    }
+
+    function closeAllocationModal(){
+        const modal = document.getElementById("allocModal");
+        if(modal) modal.remove();
+        allocationCtx = null;
+    }
+
+    async function confirmAllocation(){
+        const { txn, parsed, isCustomer, amt, openInvoices } = allocationCtx;
+        const allocations = openInvoices.map(inv=>({
+            invoiceId: inv.id,
+            amount: parseFloat((document.getElementById("alloc_"+inv.id)||{}).value)||0,
+        })).filter(a=>a.amount>0);
+        const allocatedTotal = allocations.reduce((s,a)=>s+a.amount,0);
+        if(allocatedTotal > amt + 0.01){ alert("Allocated amount cannot exceed the transaction amount."); return; }
+
+        try{
+            // Architecture migration: previously wrote to legacy tables
+            // (customer_receipts, vendor_payments, receipt_allocations,
+            // payment_allocations — different table names AND different
+            // column shapes from the real receipts/payments tables in this
+            // schema). Now delegates to
+            // POST /api/bank-accounts/transactions/:id/post-allocated
+            // which calls createDraftReceipt/postReceipt or
+            // createDraftPayment/postPayment — the exact same engine the
+            // standalone Receipts and Payments pages use.
+            const result = await window.Api.post(
+                '/bank-accounts/transactions/' + txn.id + '/post-allocated',
+                { allocations }
+            );
+            closeAllocationModal();
+            if(window.Audit) window.Audit.log(isCustomer?'receipts':'payments', txn.id, 'CREATE', null, {amount:amt, allocations});
+            alert((isCustomer?"Receipt":"Payment")+" recorded. Journal " + result.jeNo + " created.");
+            loadTxns();
+        }catch(e){ alert("Could not record "+(isCustomer?"receipt":"payment")+": "+e.message); }
+    }
+
+    // ============ CSV / XLSX IMPORT ============
+    function handleImportFile(evt){
+        const file = evt.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e){
+            if(file.name.toLowerCase().endsWith(".csv")){
+                parseCSV(e.target.result);
+            } else {
+                parseXLSX(e.target.result);
+            }
+        };
+        if(file.name.toLowerCase().endsWith(".csv")) reader.readAsText(file);
+        else reader.readAsArrayBuffer(file);
+    }
+
+    function parseCSV(text){
+        const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
+        if(!lines.length) return;
+        const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
+        const rows = lines.slice(1).map(line=>{
+            const cells = line.split(",").map(c=>c.trim().replace(/^"|"$/g,""));
+            const obj = {}; headers.forEach((h,i)=>obj[h]=cells[i]); return obj;
+        });
+        showImportPreview(headers, rows);
+    }
+
+    function parseXLSX(buffer){
+        if(typeof XLSX === "undefined"){ alert("Excel parser failed to load. Try a CSV file instead, or check your internet connection."); return; }
+        const wb = XLSX.read(buffer, { type:"array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval:"" });
+        if(!rows.length){ alert("No rows found in the first sheet."); return; }
+        showImportPreview(Object.keys(rows[0]), rows);
+    }
+
+    function showImportPreview(headers, rows){
+        importFileHeaders = headers;
+        importParsedRows = rows;
+        const fields = ["transaction_date","description","reference_no","debit","credit","balance"];
+        const fieldLabels = {transaction_date:"Date",description:"Description",reference_no:"Reference No.",debit:"Debit",credit:"Credit",balance:"Balance"};
+        document.getElementById("importMapFields").innerHTML = fields.map(f=>{
+            const guess = headers.find(h=>h.toLowerCase().includes(f.split("_")[0])) || "";
+            return `<div><label style="font-size:12px;display:block;">${fieldLabels[f]}</label>
+                <select id="mapField_${f}" style="padding:4px;">
+                    <option value="">— skip —</option>
+                    ${headers.map(h=>`<option value="${h}" ${h===guess?"selected":""}>${h}</option>`).join("")}
+                </select></div>`;
+        }).join("");
+        const previewRows = rows.slice(0,8);
+        document.getElementById("importPreviewTable").innerHTML =
+            "<thead><tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr></thead><tbody>"+
+            previewRows.map(r=>"<tr>"+headers.map(h=>`<td>${r[h]!=null?r[h]:""}</td>`).join("")+"</tr>").join("")+
+            "</tbody>";
+        document.getElementById("importPreview").style.display = "block";
+        document.getElementById("importStatus").textContent = rows.length+" rows found. Map columns above, then Import.";
+    }
+
+    function cancelImport(){
+        document.getElementById("importPreview").style.display = "none";
+        document.getElementById("importFile").value = "";
+        importParsedRows = [];
+    }
+
+    async function confirmImport(){
+        const id = bankIdFromUrl();
+        const fieldMap = {};
+        ["transaction_date","description","reference_no","debit","credit","balance"].forEach(f=>{
+            const sel = document.getElementById("mapField_"+f);
+            fieldMap[f] = sel ? sel.value : "";
+        });
+        if(!fieldMap.transaction_date || !fieldMap.description){
+            alert("Date and Description columns are required.");
+            return;
+        }
+        const toImport = importParsedRows.map(r=>({
+            bank_account_id: id,
+            transaction_date: r[fieldMap.transaction_date] || null,
+            description: r[fieldMap.description] || "",
+            reference_no: fieldMap.reference_no ? r[fieldMap.reference_no] : null,
+            debit: fieldMap.debit ? (parseFloat(r[fieldMap.debit])||0) : 0,
+            credit: fieldMap.credit ? (parseFloat(r[fieldMap.credit])||0) : 0,
+            balance: fieldMap.balance ? (parseFloat(r[fieldMap.balance])||null) : null,
+            transaction_type: "import",
+            source: "csv_import",
+            mapping_status: "Unmapped",
+        }));
+        try{
+            document.getElementById("importStatus").textContent = "Importing…";
+            // Architecture migration: rows are inserted via the API
+            // so the server can validate and assign bank_account_id
+            // from the authenticated account context, not the client.
+            const bankId = bankIdFromUrl();
+            await window.Api.post('/bank-accounts/accounts/' + bankId + '/import-transactions', { transactions: toImport });
+            document.getElementById("importStatus").textContent = "Imported "+toImport.length+" transactions.";
+            setTimeout(()=>{ cancelImport(); loadTxns(); }, 1200);
+        }catch(e){
+            document.getElementById("importStatus").textContent = "";
+            alert("Import failed: "+e.message);
+        }
+    }
+
+    // App Init
+    document.addEventListener("DOMContentLoaded", () => {
+        const emp = loadSession();
+        if(emp){
+            (function(){var el=document.getElementById("employeeName");if(el)el.textContent=emp.employeeName || emp.username || "Employee";})();
+            (function(){var el=document.getElementById("employeeMeta");if(el)el.textContent=emp.department || "Staff";})();
+            loadTheme();
+            loadLookups();
+            loadAccount();
+        }
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/validation.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

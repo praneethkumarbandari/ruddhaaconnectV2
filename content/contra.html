@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contra</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header"><h2>Contra (Cash ⇄ Bank Transfer)</h2></div>
+    <!--
+      NOTE: this page did not exist anywhere in the original shell.
+      Built new. POST /api/contra both creates AND posts in a single
+      call (see src/routes/contra.ts) — there is no draft state for
+      contra entries, matching the backend exactly.
+    -->
+    <div class="content-box" style="background:#fff;border-radius:10px;padding:20px;max-width:500px;">
+      <div class="field"><label>Date *</label><input type="date" id="fDate"></div>
+      <div class="field"><label>From Account *</label><select id="fFrom"><option value="">Select account…</option></select></div>
+      <div class="field"><label>To Account *</label><select id="fTo"><option value="">Select account…</option></select></div>
+      <div class="field"><label>Amount *</label><input type="number" id="fAmount" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Narration</label><input type="text" id="fNarration" placeholder="e.g. Cash withdrawal for petty expenses"></div>
+      <p class="msg-inline" id="modalMsg"></p>
+      <button class="btn-primary" onclick="saveContra()" style="margin-top:10px;">Post Transfer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    document.getElementById('fDate').valueAsDate = new Date();
+    setupSidebar();
+    try{
+        const accounts = await window.Api.get('/chart-of-accounts');
+        const cashBank = accounts.filter(a=>a.account_code==='1000'||a.account_code==='1100'||/cash|bank/i.test(a.account_name||''));
+        const opts = '<option value="">Select account…</option>' + cashBank.map(a=>`<option value="${a.account_code}">${a.account_code} — ${a.account_name}</option>`).join('');
+        document.getElementById('fFrom').innerHTML = opts;
+        document.getElementById('fTo').innerHTML = opts;
+    }catch(e){}
+});
+
+async function saveContra(){
+    const entryDate = document.getElementById('fDate').value;
+    const fromAccountCode = document.getElementById('fFrom').value;
+    const toAccountCode = document.getElementById('fTo').value;
+    const amount = parseFloat(document.getElementById('fAmount').value)||0;
+    const narration = document.getElementById('fNarration').value.trim();
+    const msg = document.getElementById('modalMsg');
+    if(!entryDate){ msg.textContent='Date is required.'; return; }
+    if(!fromAccountCode || !toAccountCode){ msg.textContent='Both From and To accounts are required.'; return; }
+    if(fromAccountCode===toAccountCode){ msg.textContent='From and To accounts must be different.'; return; }
+    if(!amount || amount<=0){ msg.textContent='Amount must be greater than zero.'; return; }
+    try{
+        await window.Api.post('/contra', { entryDate, fromAccountCode, toAccountCode, amount, narration: narration || undefined });
+        msg.style.color='#1a8843';
+        msg.textContent = 'Transfer posted successfully.';
+        document.getElementById('fAmount').value='';
+        document.getElementById('fNarration').value='';
+    }catch(e){
+        msg.style.color='#c0392b';
+        msg.textContent = 'Could not post transfer: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

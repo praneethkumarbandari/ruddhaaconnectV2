@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profit &amp; Loss</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header"><h2>Profit &amp; Loss</h2></div>
+    <div class="filter-bar">
+        <label style="font-size:13px;font-weight:600;color:#555">From:</label>
+        <input type="date" id="fFrom">
+        <label style="font-size:13px;font-weight:600;color:#555">To:</label>
+        <input type="date" id="fTo">
+        <button class="btn-primary" onclick="loadData()">Generate</button>
+    </div>
+    <div id="reportArea"><div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);padding:60px;text-align:center;color:#aaa;font-size:14px;">Select a date range and click Generate.</div></div>
+  </div>
+</div>
+
+<script>
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded',function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('fFrom').value = today.slice(0,8)+'01';
+    document.getElementById('fTo').value = today;
+    setupSidebar();
+});
+
+async function loadData(){
+    const area=document.getElementById('reportArea');
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    if(!from || !to){ alert('Both From and To dates are required.'); return; }
+    area.innerHTML='<div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);padding:60px;text-align:center;color:#aaa;font-size:14px;">Generating…</div>';
+    try{
+        const pnl = await window.Api.get('/reports/profit-and-loss?fromDate='+encodeURIComponent(from)+'&toDate='+encodeURIComponent(to));
+        const incomeRows = (pnl.income||[]).map(r=>`<tr><td>${r.account_code} — ${escapeHtml(r.account_name)}</td><td>₹${fmt(r.net_income_amount)}</td></tr>`).join('') || '<tr><td colspan="2" class="empty-state">None</td></tr>';
+        const expenseRows = (pnl.expense||[]).map(r=>`<tr><td>${r.account_code} — ${escapeHtml(r.account_name)}</td><td>₹${fmt(r.net_expense_amount)}</td></tr>`).join('') || '<tr><td colspan="2" class="empty-state">None</td></tr>';
+        area.innerHTML = `
+            <div class="report-card" style="margin-bottom:16px;">
+                <div class="report-title">Income</div>
+                <table><tbody>${incomeRows}<tr class="total-row"><td>Total Income</td><td>₹${fmt(pnl.totalIncome)}</td></tr></tbody></table>
+            </div>
+            <div class="report-card" style="margin-bottom:16px;">
+                <div class="report-title">Expense</div>
+                <table><tbody>${expenseRows}<tr class="total-row"><td>Total Expense</td><td>₹${fmt(pnl.totalExpense)}</td></tr></tbody></table>
+            </div>
+            <div class="report-card">
+                <div class="report-title">${pnl.profitOrLoss>=0?'Net Profit':'Net Loss'}: ₹${fmt(Math.abs(pnl.profitOrLoss))}</div>
+            </div>
+        `;
+    }catch(e){
+        area.innerHTML='<div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);padding:60px;text-align:center;color:#c0392b;font-size:14px;">Could not generate P&amp;L: '+(e.message||'Unknown error')+'</div>';
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

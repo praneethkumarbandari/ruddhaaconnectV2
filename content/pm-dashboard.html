@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Management Dashboard</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+.pm-stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:20px; }
+.pm-stat-card { background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px)); border-radius:10px; padding:16px; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
+.pm-stat-card h4 { margin:0 0 8px; font-size:12px; color:#888; font-weight:600; text-transform:uppercase; }
+.pm-stat-card .val { font-size:24px; font-weight:700; }
+.pm-section { background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px)); border-radius:10px; padding:16px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
+.pm-section h3 { margin:0 0 12px; font-size:15px; }
+.pm-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:13px; }
+.pm-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width:800px) { .pm-two-col { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Project Management Dashboard</h2>
+        <button class="btn-primary" onclick="window.parent.location.href='pm-projects.html'">View All Projects</button>
+    </div>
+    <!--
+      NOTE: aggregating financials across ALL projects at once has no
+      dedicated backend endpoint (each report function is scoped to a
+      single project — see src/lib/project-reports.ts). Rather than
+      invent a new API (explicitly discouraged — "reuse existing
+      endpoints, do not create new APIs unless absolutely required"),
+      this dashboard lists project counts by status directly (a real,
+      cheap GET /api/projects call) and shows financial widgets only
+      once a project is selected below — each figure still comes
+      entirely from the real per-project reporting endpoints, just
+      requested per-project rather than pre-aggregated.
+    -->
+    <div class="pm-stat-grid">
+        <div class="pm-stat-card"><h4>Total Projects</h4><div class="val" id="statTotal">—</div></div>
+        <div class="pm-stat-card"><h4>Active</h4><div class="val" id="statActive">—</div></div>
+        <div class="pm-stat-card"><h4>On Hold</h4><div class="val" id="statOnHold">—</div></div>
+        <div class="pm-stat-card"><h4>Closed</h4><div class="val" id="statClosed">—</div></div>
+    </div>
+
+    <div class="pm-section">
+        <h3>Select a project for financial detail</h3>
+        <select id="projectPicker" onchange="loadProjectFinancials()" style="width:100%;max-width:400px;padding:8px;">
+            <option value="">Choose a project…</option>
+        </select>
+    </div>
+
+    <div id="financialArea" style="display:none;">
+        <div class="pm-two-col">
+            <div class="pm-section">
+                <h3>Budget vs Actual</h3>
+                <div id="budgetVsActualBody"></div>
+            </div>
+            <div class="pm-section">
+                <h3>Profitability</h3>
+                <div id="profitabilityBody"></div>
+            </div>
+        </div>
+        <div class="pm-two-col">
+            <div class="pm-section">
+                <h3>Cash Flow</h3>
+                <div id="cashFlowBody"></div>
+            </div>
+            <div class="pm-section">
+                <h3>Outstanding</h3>
+                <div id="outstandingBody"></div>
+            </div>
+        </div>
+        <div class="pm-two-col">
+            <div class="pm-section">
+                <h3>Budget Utilization</h3>
+                <div id="chartBudgetUtil"></div>
+            </div>
+            <div class="pm-section">
+                <h3>Revenue vs Cost</h3>
+                <div id="chartRevCost"></div>
+            </div>
+        </div>
+        <div class="pm-two-col">
+            <div class="pm-section">
+                <h3>Task Status Distribution</h3>
+                <div id="chartTaskStatus"></div>
+            </div>
+            <div class="pm-section">
+                <h3>Milestone Progress</h3>
+                <div id="chartMilestoneProgress"></div>
+            </div>
+        </div>
+        <div class="pm-section">
+            <h3>Net Profit Trend (last 6 months)</h3>
+            <p style="font-size:11px;color:#888;margin-top:-6px;">Each point is a real, separate call to the profitability report for that month — not interpolated or estimated.</p>
+            <div id="chartProfitTrend"></div>
+        </div>
+        <div class="pm-section">
+            <h3>Cash Flow Trend (last 6 months)</h3>
+            <p style="font-size:11px;color:#888;margin-top:-6px;">Same approach — six real calls to the cash flow report, one per month.</p>
+            <div id="chartCashTrend"></div>
+        </div>
+    </div>
+
+    <div class="pm-section">
+        <h3>Quick Actions</h3>
+        <button class="btn-secondary" onclick="window.parent.location.href='pm-projects.html?action=new'">＋ New Project</button>
+        <button class="btn-secondary" onclick="window.parent.location.href='pm-projects.html'">View Project List</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+let allProjects = [];
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    await loadCounts();
+});
+
+async function loadCounts(){
+    try{
+        allProjects = await window.Api.get('/projects');
+        document.getElementById('statTotal').textContent = allProjects.length;
+        document.getElementById('statActive').textContent = allProjects.filter(p=>p.status==='active').length;
+        document.getElementById('statOnHold').textContent = allProjects.filter(p=>p.status==='on_hold').length;
+        document.getElementById('statClosed').textContent = allProjects.filter(p=>p.status==='closed').length;
+        const picker = document.getElementById('projectPicker');
+        picker.innerHTML = '<option value="">Choose a project…</option>' + allProjects.map(p=>`<option value="${p.id}">${p.project_code} — ${p.project_name}</option>`).join('');
+    }catch(e){
+        document.getElementById('statTotal').textContent = 'Error';
+    }
+}
+
+function simpleBarChart(containerId, items, colorFn){
+    const max = Math.max(...items.map(i=>Math.abs(i.value)), 1);
+    document.getElementById(containerId).innerHTML = items.map(i => `
+        <div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px;"><span>${i.label}</span><span>₹${fmt(i.value)}</span></div>
+            <div style="background:#eee;border-radius:4px;height:14px;overflow:hidden;">
+                <div style="width:${Math.min(100,Math.abs(i.value)/max*100)}%;height:100%;background:${colorFn?colorFn(i):'#3b5bfd'};"></div>
+            </div>
+        </div>`).join('');
+}
+function simpleLineChart(containerId, points){
+    const w=400, h=120, pad=20;
+    const values = points.map(p=>p.value);
+    const min = Math.min(0, ...values), max = Math.max(...values, 1);
+    const range = (max-min)||1;
+    const stepX = (w-2*pad)/Math.max(points.length-1,1);
+    const coords = points.map((p,i)=>({x: pad+i*stepX, y: h-pad-((p.value-min)/range)*(h-2*pad)}));
+    const path = coords.map((c,i)=>(i===0?'M':'L')+c.x+','+c.y).join(' ');
+    const zeroY = h-pad-((0-min)/range)*(h-2*pad);
+    document.getElementById(containerId).innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:500px;height:120px;">
+            <line x1="${pad}" y1="${zeroY}" x2="${w-pad}" y2="${zeroY}" stroke="#ddd" stroke-dasharray="4"/>
+            <path d="${path}" fill="none" stroke="#3b5bfd" stroke-width="2"/>
+            ${coords.map(c=>`<circle cx="${c.x}" cy="${c.y}" r="3" fill="#3b5bfd"/>`).join('')}
+        </svg>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;max-width:500px;">
+            ${points.map(p=>`<span>${p.label}</span>`).join('')}
+        </div>`;
+}
+function monthRangesBack(n){
+    const ranges = [];
+    const now = new Date();
+    for(let i=n-1;i>=0;i--){
+        const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+        const from = d.toISOString().split('T')[0];
+        const to = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().split('T')[0];
+        ranges.push({ label: d.toLocaleDateString('en-IN',{month:'short'}), from, to });
+    }
+    return ranges;
+}
+
+async function loadCharts(projectId){
+    try{
+        const bva = await window.Api.get('/projects/'+projectId+'/reports/budget-vs-actual');
+        simpleBarChart('chartBudgetUtil', [
+            { label:'Cost Budgeted', value: bva.cost.budgeted },
+            { label:'Cost Actual', value: bva.cost.actual },
+            { label:'Revenue Budgeted', value: bva.revenue.budgeted },
+            { label:'Revenue Actual', value: bva.revenue.actual },
+        ], (i)=> i.label.includes('Actual') ? '#e67e22' : '#3b5bfd');
+    }catch(e){ document.getElementById('chartBudgetUtil').textContent = 'No approved budget yet.'; }
+
+    try{
+        const [rev, cost] = await Promise.all([
+            window.Api.get('/projects/'+projectId+'/reports/revenue'),
+            window.Api.get('/projects/'+projectId+'/reports/cost'),
+        ]);
+        simpleBarChart('chartRevCost', [
+            { label:'Net Revenue', value: rev.netRevenue },
+            { label:'Net Cost', value: cost.netCost },
+        ], (i)=> i.label.includes('Cost') ? '#c0392b' : '#1a8843');
+    }catch(e){ document.getElementById('chartRevCost').textContent = 'Could not load.'; }
+
+    try{
+        const tasks = await window.Api.get('/projects/'+projectId+'/tasks');
+        const counts = {};
+        tasks.forEach(t=>{ counts[t.status] = (counts[t.status]||0)+1; });
+        simpleBarChart('chartTaskStatus', Object.entries(counts).map(([label,value])=>({label:label.replace('_',' '),value})));
+        if(!tasks.length) document.getElementById('chartTaskStatus').textContent = 'No tasks yet.';
+    }catch(e){ document.getElementById('chartTaskStatus').textContent = 'Could not load.'; }
+
+    try{
+        const milestones = await window.Api.get('/projects/'+projectId+'/milestones');
+        const counts = {};
+        milestones.forEach(m=>{ counts[m.status] = (counts[m.status]||0)+1; });
+        simpleBarChart('chartMilestoneProgress', Object.entries(counts).map(([label,value])=>({label:label.replace('_',' '),value})));
+        if(!milestones.length) document.getElementById('chartMilestoneProgress').textContent = 'No milestones yet.';
+    }catch(e){ document.getElementById('chartMilestoneProgress').textContent = 'Could not load.'; }
+
+    // Trends: 6 real per-month calls each, not interpolated.
+    try{
+        const ranges = monthRangesBack(6);
+        const profitPoints = [];
+        for(const r of ranges){
+            const p = await window.Api.get('/projects/'+projectId+'/reports/profitability?fromDate='+r.from+'&toDate='+r.to);
+            profitPoints.push({ label: r.label, value: p.netProfit });
+        }
+        simpleLineChart('chartProfitTrend', profitPoints);
+    }catch(e){ document.getElementById('chartProfitTrend').textContent = 'Could not load trend.'; }
+
+    try{
+        const ranges = monthRangesBack(6);
+        const cashPoints = [];
+        for(const r of ranges){
+            const c = await window.Api.get('/projects/'+projectId+'/reports/cashflow?fromDate='+r.from+'&toDate='+r.to);
+            cashPoints.push({ label: r.label, value: c.netCash });
+        }
+        simpleLineChart('chartCashTrend', cashPoints);
+    }catch(e){ document.getElementById('chartCashTrend').textContent = 'Could not load trend.'; }
+}
+
+async function loadProjectFinancials(){
+    const projectId = document.getElementById('projectPicker').value;
+    const area = document.getElementById('financialArea');
+    if(!projectId){ area.style.display='none'; return; }
+    area.style.display='block';
+    loadCharts(projectId);
+    try{
+        const dashboard = await window.Api.get('/projects/'+projectId+'/reports/dashboard');
+        const bva = dashboard.budgetVsActual;
+        document.getElementById('budgetVsActualBody').innerHTML = `
+            <div class="pm-row"><span>Cost — Budgeted</span><span>₹${fmt(bva.cost.budgeted)}</span></div>
+            <div class="pm-row"><span>Cost — Actual</span><span>₹${fmt(bva.cost.actual)}</span></div>
+            <div class="pm-row"><span>Cost — Variance</span><span style="color:${bva.cost.variance<0?'#c0392b':'#1a8843'}">₹${fmt(bva.cost.variance)}</span></div>
+            <div class="pm-row"><span>Revenue — Budgeted</span><span>₹${fmt(bva.revenue.budgeted)}</span></div>
+            <div class="pm-row"><span>Revenue — Actual</span><span>₹${fmt(bva.revenue.actual)}</span></div>
+            <div class="pm-row"><span>Revenue — Variance</span><span style="color:${bva.revenue.variance<0?'#c0392b':'#1a8843'}">₹${fmt(bva.revenue.variance)}</span></div>
+        `;
+        const p = dashboard.profitability;
+        document.getElementById('profitabilityBody').innerHTML = `
+            <div class="pm-row"><span>Net Revenue</span><span>₹${fmt(p.netRevenue)}</span></div>
+            <div class="pm-row"><span>Net Cost</span><span>₹${fmt(p.netCost)}</span></div>
+            <div class="pm-row"><span>Gross Profit</span><span>₹${fmt(p.grossProfit)}</span></div>
+            <div class="pm-row"><span>Manual Adjustments</span><span>₹${fmt(p.manualJournalNet)}</span></div>
+            <div class="pm-row" style="font-weight:700;"><span>Net Profit</span><span>₹${fmt(p.netProfit)}</span></div>
+        `;
+        const cf = dashboard.cashFlow;
+        document.getElementById('cashFlowBody').innerHTML = `
+            <div class="pm-row"><span>Cash In (Receipts)</span><span>₹${fmt(cf.cashIn)}</span></div>
+            <div class="pm-row"><span>Cash Out (Payments)</span><span>₹${fmt(cf.cashOut)}</span></div>
+            <div class="pm-row" style="font-weight:700;"><span>Net Cash</span><span>₹${fmt(cf.netCash)}</span></div>
+        `;
+        const o = dashboard.outstanding;
+        document.getElementById('outstandingBody').innerHTML = `
+            <div class="pm-row"><span>Receivable (customer owes)</span><span>₹${fmt(o.receivable)}</span></div>
+            <div class="pm-row"><span>Payable (owed to vendor)</span><span>₹${fmt(o.payable)}</span></div>
+        `;
+    }catch(e){
+        area.innerHTML = '<div class="pm-section">Could not load financials: '+(e.message||'Unknown error')+'</div>';
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

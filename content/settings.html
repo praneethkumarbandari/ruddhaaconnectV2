@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<script>
+        (function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');
+            if(t.primary_color)    document.documentElement.style.setProperty('--primary-color',t.primary_color);
+            if(t.secondary_color)  document.documentElement.style.setProperty('--secondary-color',t.secondary_color);
+            if(t.background_color) document.documentElement.style.setProperty('--background-color',t.background_color);
+            if(t.font_family)      document.documentElement.style.setProperty('--font-family',t.font_family);
+        }catch(e){}}());
+    </script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+
+  /* FIX (Theme & Colors — color picker UI): input[type="color"] had no
+     styling at all here, so it rendered at whatever size/shape the
+     browser defaults to sitting next to a full-width hex text input —
+     inconsistent across browsers and not the clear "square preview,
+     click to open the picker" pattern every color field should share.
+     This makes every color field look and behave identically: a fixed
+     36x36 square swatch (native color-picker behavior is unchanged —
+     clicking the square still opens the OS/browser picker, this only
+     restyles its appearance) showing the live selected color, sitting
+     next to a compact hex field instead of a stretched one. */
+  .color-row { display:flex; align-items:center; gap:10px; }
+  .color-row input[type="color"] {
+    width: 36px; height: 36px; padding: 0; border: 1.5px solid #e0e0e0;
+    border-radius: 6px; cursor: pointer; flex: none;
+    -webkit-appearance: none; appearance: none; background: none;
+  }
+  .color-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+  .color-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+  .color-row input[type="color"]::-moz-color-swatch { border: none; border-radius: 4px; }
+  .color-row input[type="text"] { width: auto; flex: 1; min-width: 0; }
+
+  /* FIX: .save-msg / .err-msg were used throughout this file (Settings,
+     Account Mapping, Password) with JS toggling a .show class on them,
+     but neither class was ever actually defined anywhere — not here,
+     not in any shared stylesheet. With no default `display:none`, both
+     the success and error message spans were visible unconditionally,
+     regardless of what the JS's classList.add/remove('show') calls did.
+     This is what caused "✓ Settings saved!" and "Failed to save" to
+     show at the same time. */
+  .save-msg, .err-msg { display:none; font-size:13px; font-weight:600; margin-left:10px; }
+  .save-msg.show { display:inline; color:#2e7d32; }
+  .err-msg.show { display:inline; color:#c62828; }
+  .settings-layout { display: flex; gap: 24px; align-items: flex-start; }
+  .settings-tabs { display: flex; flex-direction: column; gap: 2px; min-width: 200px; flex-shrink: 0; }
+  .settings-tab { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #444; text-decoration: none; }
+  .settings-tab:hover { background: var(--secondary-color, #eef2ff); }
+  .settings-tab.active { background: var(--primary-color, #1f6bff); color: #fff; }
+  .settings-tab-external { color: #667; font-weight: 500; }
+  .settings-panels { flex: 1; min-width: 0; }
+  .settings-panel { display: none; }
+  .settings-panel.active { display: block; }
+  .overview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .settings-layout { flex-direction: column; } .settings-tabs { flex-direction: row; flex-wrap: wrap; } .overview-grid { grid-template-columns: 1fr; } .settings-grid { grid-template-columns: 1fr; } }
+  /* FIX (Settings page alignment): .settings-grid and .field are used
+     23 times throughout this page's markup (Business & Branding,
+     Theme & Colors, etc.) but were never actually defined in any
+     stylesheet — every field on this page has been falling back to
+     unstyled default block stacking (no grid, no label/input
+     spacing) this whole time. This is the real root cause of the
+     alignment issue, not a spacing tweak. Modeled on the same
+     label-over-input field pattern css/forms.css's .field-row uses
+     elsewhere, scoped locally here since .field is too generic a
+     name to add globally without risk of colliding with something
+     unrelated on another page. */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .settings-grid .field { display: flex; flex-direction: column; gap: 6px; }
+  .settings-grid .field.full { grid-column: 1 / -1; }
+  .settings-grid .field label { font-size: 12px; font-weight: 700; color: #667; text-transform: uppercase; letter-spacing: 0.02em; }
+  .settings-grid .field input,
+  .settings-grid .field select,
+  .settings-grid .field textarea { width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #dbe1ea; border-radius: 6px; font-size: 14px; }
+  .settings-grid .field textarea { min-height: 70px; resize: vertical; }
+  .overview-card { display: flex; gap: 14px; padding: 18px; background: var(--card-color, #fff); border-radius: 10px; border: 1px solid var(--card-border, #eee); }
+  .overview-card-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .overview-card-body h4 { font-size: 13px; margin: 0 0 8px; }
+  .overview-stat-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #555; margin-bottom: 4px; }
+  .overview-card-body a { font-size: 12px; color: var(--primary-color, #1f6bff); text-decoration: none; font-weight: 600; display: inline-block; margin-top: 6px; }
+  .notif-channel-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--card-border, #eee); font-size: 14px; font-weight: 600; }
+  .notif-channel-row:last-of-type { border-bottom: none; }
+  .notif-channel-row i { width: 20px; color: var(--primary-color, #1f6bff); margin-right: 8px; }
+  .switch { position: relative; display: inline-block; width: 42px; height: 24px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 24px; transition: .2s; }
+  .switch-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
+  .switch input:checked + .switch-slider { background-color: var(--primary-color, #1f6bff); }
+  .switch input:checked + .switch-slider:before { transform: translateX(18px); }
+</style>
+<script>
+// Same fix, functionally: covers any save/error message pair not
+// already given a real hide/show class toggle (defensive default).
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.save-msg, .err-msg').forEach(function(el){
+    if(!el.classList.contains('show')) el.style.display='none';
+  });
+});
+</script>
+</head>
+<body>
+
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Settings</h2>
+        <p>Configure your portal branding, theme, and business info.</p>
+    </div>
+
+    <div class="settings-layout">
+      <nav class="settings-tabs">
+        <a href="#overview" onclick="showSettingsTab('overview')" class="settings-tab active" data-tab="overview">Overview</a>
+        <a href="#branding" onclick="showSettingsTab('branding')" class="settings-tab" data-tab="branding">Company Profile</a>
+        <a href="#theme" onclick="showSettingsTab('theme')" class="settings-tab" data-tab="theme">Theme &amp; Colors</a>
+        <a href="#numbering" onclick="showSettingsTab('numbering')" class="settings-tab" data-tab="numbering">Numbering Series</a>
+        <a href="#notifications" onclick="showSettingsTab('notifications')" class="settings-tab" data-tab="notifications">Notifications</a>
+        <a href="#backup" onclick="showSettingsTab('backup')" class="settings-tab" data-tab="backup">Backup &amp; Restore</a>
+        <a href="/permissions.html" target="_top" class="settings-tab settings-tab-external">Roles &amp; Permissions ↗</a>
+        <a href="/gst-settings.html" target="_top" class="settings-tab settings-tab-external">Tax Settings ↗</a>
+        <a href="/pdf-print-styles.html" target="_top" class="settings-tab settings-tab-external">PDF Print Style ↗</a>
+        <a href="/activity-log.html" target="_top" class="settings-tab settings-tab-external">Audit Logs ↗</a>
+      </nav>
+
+      <div class="settings-panels">
+
+        <!--
+          FIX: this Overview only shows cards for things that actually
+          exist and have real data behind them. Notifications and
+          Backup were added after this comment was first written —
+          Notifications now really persists (see Settings tab), and
+          Backup's "Download Backup" really works. Their cards below
+          reflect that real state, not a fabricated number.
+        -->
+        <div class="settings-panel active" id="panel-overview">
+          <div class="overview-grid">
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fa-solid fa-users"></i></div>
+              <div class="overview-card-body">
+                <h4>Users &amp; Roles</h4>
+                <div class="overview-stat-row"><span>Employees</span><b id="ovEmployees">—</b></div>
+                <div class="overview-stat-row"><span>Roles</span><b id="ovRoles">—</b></div>
+                <a href="/employees.html" target="_top">Manage employees →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#ecfdf5;color:#059669;"><i class="fa-solid fa-shield-halved"></i></div>
+              <div class="overview-card-body">
+                <h4>Permissions</h4>
+                <div class="overview-stat-row"><span>Total Permissions</span><b id="ovPermissions">—</b></div>
+                <a href="/permissions.html" target="_top">Manage permissions →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#fff7ed;color:#ea580c;"><i class="fa-solid fa-list-ol"></i></div>
+              <div class="overview-card-body">
+                <h4>Numbering Series</h4>
+                <div id="ovNumberingList" style="font-size:12px;color:#555;line-height:1.8;">Loading…</div>
+                <a href="#numbering" onclick="showSettingsTab('numbering')">View all numbering series →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#fdf2f8;color:#db2777;"><i class="fa-solid fa-file-invoice"></i></div>
+              <div class="overview-card-body">
+                <h4>Document Settings</h4>
+                <div class="overview-stat-row"><span>Default PDF Template</span><b id="ovPdfStyle">—</b></div>
+                <a href="/pdf-print-styles.html" target="_top">Configure PDF print style →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#eff6ff;color:#2563eb;"><i class="fa-solid fa-landmark"></i></div>
+              <div class="overview-card-body">
+                <h4>Tax Settings</h4>
+                <div class="overview-stat-row"><span>GST Number</span><b id="ovGst">—</b></div>
+                <a href="/gst-settings.html" target="_top">View all tax settings →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#f5f3ff;color:#7c3aed;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+              <div class="overview-card-body">
+                <h4>Audit Logs</h4>
+                <div class="overview-stat-row"><span>Track system activity</span></div>
+                <a href="/activity-log.html" target="_top">View audit logs →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#f0fdfa;color:#0d9488;"><i class="fa-solid fa-bell"></i></div>
+              <div class="overview-card-body">
+                <h4>Notifications</h4>
+                <div class="overview-stat-row"><span>Channels enabled</span><b id="ovNotifChannels">—</b></div>
+                <a href="#notifications" onclick="showSettingsTab('notifications')">Configure notifications →</a>
+              </div>
+            </div>
+            <div class="overview-card">
+              <div class="overview-card-icon" style="background:#fffbeb;color:#d97706;"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+              <div class="overview-card-body">
+                <h4>Backup &amp; Restore</h4>
+                <div class="overview-stat-row"><span>Manual export</span><b>Available</b></div>
+                <a href="#backup" onclick="showSettingsTab('backup')">Download backup →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-panel" id="panel-branding">
+    <!-- Branding -->
+    <div class="settings-card">
+        <h3>Business &amp; Branding</h3>
+        <div class="settings-grid">
+            <div class="field"><label>Company Name</label><input type="text" id="sCompanyName" placeholder="e.g. RuddhaConnect"></div>
+            <div class="field"><label>Logo URL</label><input type="url" id="sLogoUrl" placeholder="https://…/logo.png"></div>
+            <div class="field full"><label>Business Address</label><textarea id="sAddress" placeholder="123, Street Name, City, State 000000"></textarea></div>
+            <div class="field"><label>Company State</label>
+                <select id="sState">
+                    <option value="">Select state…</option>
+                    <option>Andhra Pradesh</option><option>Arunachal Pradesh</option><option>Assam</option>
+                    <option>Bihar</option><option>Chhattisgarh</option><option>Goa</option><option>Gujarat</option>
+                    <option>Haryana</option><option>Himachal Pradesh</option><option>Jharkhand</option>
+                    <option>Karnataka</option><option>Kerala</option><option>Madhya Pradesh</option>
+                    <option>Maharashtra</option><option>Manipur</option><option>Meghalaya</option><option>Mizoram</option>
+                    <option>Nagaland</option><option>Odisha</option><option>Punjab</option><option>Rajasthan</option>
+                    <option>Sikkim</option><option>Tamil Nadu</option><option>Telangana</option><option>Tripura</option>
+                    <option>Uttar Pradesh</option><option>Uttarakhand</option><option>West Bengal</option>
+                    <option>Andaman and Nicobar Islands</option><option>Chandigarh</option>
+                    <option>Dadra and Nagar Haveli and Daman and Diu</option><option>Delhi</option>
+                    <option>Jammu and Kashmir</option><option>Ladakh</option><option>Lakshadweep</option>
+                    <option>Puducherry</option>
+                </select>
+            </div>
+            <div class="field"><label>GST Number</label><input type="text" id="sGst" placeholder="22AAAAA0000A1Z5"></div>
+            <div class="field"><label>Phone</label><input type="tel" id="sPhone" placeholder="+91 98765 43210"></div>
+            <div class="field"><label>Email</label><input type="email" id="sEmail" placeholder="info@company.com"></div>
+            <div class="field"><label>Website</label><input type="url" id="sWebsite" placeholder="https://company.com"></div>
+            <div class="field"><label>Currency</label>
+                <select id="sCurrency">
+                    <option value="INR">INR — Indian Rupee (₹)</option>
+                    <option value="USD">USD — US Dollar ($)</option>
+                    <option value="EUR">EUR — Euro (€)</option>
+                    <option value="GBP">GBP — British Pound (£)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+        </div>
+
+        <div class="settings-panel" id="panel-theme">
+    <!-- Theme -->
+    <div class="settings-card">
+        <h3>Theme &amp; Colors</h3>
+        <div class="settings-grid">
+            <div class="field">
+                <label>Primary Color</label>
+                <div class="color-row">
+                    <input type="color" id="cPrimaryPicker" value="#1f6bff" oninput="syncColor(this,'cPrimary')">
+                    <input type="text" id="cPrimary" value="#1f6bff" oninput="syncPicker(this,'cPrimaryPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Secondary / Accent</label>
+                <div class="color-row">
+                    <input type="color" id="cSecondaryPicker" value="#dbe7ff" oninput="syncColor(this,'cSecondary')">
+                    <input type="text" id="cSecondary" value="#dbe7ff" oninput="syncPicker(this,'cSecondaryPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Background Color</label>
+                <div class="color-row">
+                    <input type="color" id="cBgPicker" value="#f5f7fb" oninput="syncColor(this,'cBg')">
+                    <input type="text" id="cBg" value="#f5f7fb" oninput="syncPicker(this,'cBgPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Text Color</label>
+                <div class="color-row">
+                    <input type="color" id="cTextPicker" value="#111111" oninput="syncColor(this,'cText')">
+                    <input type="text" id="cText" value="#111111" oninput="syncPicker(this,'cTextPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Heading Color</label>
+                <div class="color-row">
+                    <input type="color" id="cHeadingPicker" value="#111111" oninput="syncColor(this,'cHeading')">
+                    <input type="text" id="cHeading" value="#111111" oninput="syncPicker(this,'cHeadingPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Card Color</label>
+                <div class="color-row">
+                    <input type="color" id="cCardPicker" value="#ffffff" oninput="syncColor(this,'cCard')">
+                    <input type="text" id="cCard" value="#ffffff" oninput="syncPicker(this,'cCardPicker')">
+                </div>
+                <p style="font-size:11px;color:#8a93a6;margin-top:4px;">Cards use this color at partial transparency with a blur, for the glass effect — the exact color you pick, softened.</p>
+            </div>
+            <div class="field">
+                <label>Dashboard Card Title Color</label>
+                <div class="color-row">
+                    <input type="color" id="cKpiTitlePicker" value="#8a93a6" oninput="syncColor(this,'cKpiTitle')">
+                    <input type="text" id="cKpiTitle" value="#8a93a6" oninput="syncPicker(this,'cKpiTitlePicker')">
+                </div>
+                <p style="font-size:11px;color:#8a93a6;margin-top:4px;">The small label text on Dashboard KPI cards (e.g. "Receivables", "Payables").</p>
+            </div>
+            <div class="field">
+                <label>Dashboard Card Content Color</label>
+                <div class="color-row">
+                    <input type="color" id="cKpiContentPicker" value="#1a2233" oninput="syncColor(this,'cKpiContent')">
+                    <input type="text" id="cKpiContent" value="#1a2233" oninput="syncPicker(this,'cKpiContentPicker')">
+                </div>
+                <p style="font-size:11px;color:#8a93a6;margin-top:4px;">The large value text on Dashboard KPI cards (e.g. "₹1,24,500").</p>
+            </div>
+            <div class="field">
+                <label>Menu Color</label>
+                <div class="color-row">
+                    <input type="color" id="cMenuPicker" value="#111622" oninput="syncColor(this,'cMenu')">
+                    <input type="text" id="cMenu" value="#111622" oninput="syncPicker(this,'cMenuPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Menu Text Color</label>
+                <div class="color-row">
+                    <input type="color" id="cMenuTextPicker" value="#ffffff" oninput="syncColor(this,'cMenuText')">
+                    <input type="text" id="cMenuText" value="#ffffff" oninput="syncPicker(this,'cMenuTextPicker')">
+                </div>
+            </div>
+            <div class="field">
+                <label>Font Family</label>
+                <select id="sFont">
+                    <option value="'Segoe UI', sans-serif">Segoe UI (default)</option>
+                    <option value="'Inter', sans-serif">Inter</option>
+                    <option value="'Roboto', sans-serif">Roboto</option>
+                    <option value="'Open Sans', sans-serif">Open Sans</option>
+                    <option value="'Poppins', sans-serif">Poppins</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Invoice / Receipt / Payment PDF Style</label>
+                <select id="sPdfStyle">
+                    <option value="classic">Classic</option>
+                    <option value="modern">Modern</option>
+                    <option value="minimal">Minimal</option>
+                </select>
+                <p style="font-size:11px;color:#8a93a6;margin-top:4px;">Applies to every PDF downloaded from Invoices, Receipts, and Payments.</p>
+            </div>
+        </div>
+    </div>
+        </div>
+
+    <div class="save-row">
+        <button class="btn-primary" id="saveBtn" onclick="saveSettings()">Save Settings</button>
+        <span class="save-msg" id="saveMsg">✓ Settings saved!</span>
+        <span class="err-msg" id="errMsg">Failed to save. Please try again.</span>
+    </div>
+
+    <!--
+      FIX: Account Mapping removed from here entirely. Of its 17
+      fields, only tds_payable_account_code was ever actually read by
+      the backend — the other 16 did nothing when filled in. Replaced
+      by a "Special Role" field directly on the account itself in
+      Chart of Accounts (see chart-of-accounts.html) — one place,
+      genuinely connected to what it configures, instead of a second
+      disconnected settings screen.
+    -->
+
+        <div class="settings-panel" id="panel-numbering">
+    <!-- Numbering & Prefixes -->
+    <div class="settings-card">
+        <h3>Numbering &amp; Prefixes</h3>
+        <p style="color:#7b8bab;font-size:13px;margin-top:-6px;margin-bottom:14px;">Each document type gets its own prefix and running number. Numbers advance automatically only when a document is saved — editing here does not renumber existing documents.</p>
+        <table class="data-table" id="numberingTable">
+            <thead><tr><th>Document Type</th><th>Prefix</th><th>Separator</th><th>Next Number</th><th>Digits</th><th>Suffix</th><th>Active</th><th></th></tr></thead>
+            <tbody id="numberingBody"><tr><td colspan="8" style="text-align:center;padding:16px;color:#888;">Loading…</td></tr></tbody>
+        </table>
+    </div>
+        </div>
+
+        <div class="settings-panel" id="panel-notifications">
+    <div class="settings-card">
+        <h3>Notifications</h3>
+        <p style="color:#7b8bab;font-size:13px;margin-top:-6px;margin-bottom:16px;">
+            Choose which channels are enabled. <b>These are saved for real</b> —
+            but no code yet actually sends an email, SMS, or WhatsApp message on
+            any event. This saves your preference now, so nothing needs to be
+            re-configured once sending itself is built.
+        </p>
+        <div class="notif-channel-row">
+            <div><i class="fa-solid fa-envelope"></i> Email</div>
+            <label class="switch"><input type="checkbox" id="notifyEmail"><span class="switch-slider"></span></label>
+        </div>
+        <div class="notif-channel-row">
+            <div><i class="fa-solid fa-comment-sms"></i> SMS</div>
+            <label class="switch"><input type="checkbox" id="notifySms"><span class="switch-slider"></span></label>
+        </div>
+        <div class="notif-channel-row">
+            <div><i class="fa-brands fa-whatsapp"></i> WhatsApp</div>
+            <label class="switch"><input type="checkbox" id="notifyWhatsapp"><span class="switch-slider"></span></label>
+        </div>
+        <div class="save-row">
+            <button class="btn-primary" onclick="saveNotificationPrefs()">Save Notification Preferences</button>
+            <span class="save-msg" id="notifSaveMsg">✓ Saved!</span>
+            <span class="err-msg" id="notifErrMsg">Failed to save. Please try again.</span>
+        </div>
+    </div>
+        </div>
+
+        <div class="settings-panel" id="panel-backup">
+    <div class="settings-card">
+        <h3>Backup &amp; Restore</h3>
+        <p style="color:#7b8bab;font-size:13px;margin-top:-6px;margin-bottom:16px;">
+            <b>Download Backup is real</b> — it exports your actual customers,
+            vendors, chart of accounts, employees, invoices, journal entries, and
+            bank accounts as one file, right now. <b>There is no automatic/
+            scheduled backup</b> and no Restore feature — a restore that goes
+            wrong could overwrite live business data, so that's real, separate,
+            careful work rather than something bundled in here silently.
+        </p>
+        <button class="btn-primary" onclick="downloadBackup()"><i class="fa-solid fa-download"></i> Download Backup Now</button>
+        <span class="save-msg" id="backupSaveMsg">✓ Download started!</span>
+        <span class="err-msg" id="backupErrMsg">Could not create backup.</span>
+    </div>
+        </div>
+
+    <!--
+      FIX: User Profile + Reset Password moved to their own page
+      (profile.html), reachable from the topbar Profile button —
+      Settings itself is being restricted to admins, but every
+      employee still needs to be able to change their own password
+      regardless of role, so it can't live only here anymore.
+    -->
+
+      </div>
+    </div>
+  </div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script>
+let db,configId=null;
+const emp=JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+if(!emp)window.location.href='business-login.html';
+
+window.addEventListener('DOMContentLoaded',async function(){
+    db = window.db;
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.name||emp.email||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent=emp.role||emp.department||'—';})();}
+    setupSidebar();
+    loadSettings();
+    loadNumbering();
+    loadOverview();
+    loadNotificationPrefs();
+});
+
+// FIX: Account Mapping (MAPPING_FIELDS, loadAccountMapping,
+// saveAccountMapping — ~70 lines) removed entirely. Of its 17 fields
+// only tds_payable_account_code was ever actually read anywhere in
+// the backend; the rest silently did nothing when filled in. See
+// chart-of-accounts.html's "Special Role" field and
+// src/lib/chart-of-accounts.ts's getAccountBySpecialRole() for the
+// real replacement — one place, genuinely connected.
+
+// loadProfile() and changePassword() moved to profile.html — see the
+// comment near the removed User Profile / Reset Password section above.
+
+// ================= NUMBERING & PREFIXES =================
+let numberingRows=[];
+// FIX: this table used to only show rows that already existed in
+// numbering_sequences — but a row is only created the first time a
+// document of that type is actually posted, so a type never used yet
+// (very likely for a fresh deployment) showed no row at all, with no
+// way to pre-configure its prefix/suffix in advance. This list is
+// every document type the Invoice Engine and the rest of the app can
+// produce; any type not yet in the database is synthesized as an
+// editable, unsaved row with sensible defaults so it's configurable
+// from day one.
+const KNOWN_DOCUMENT_TYPES = [
+    'sales_invoice','purchase_invoice','goods_return','debit_note','credit_note',
+    'journal_entry','receipt','payment','contra',
+];
+let currentFinancialYearId = null;
+
+async function loadNumbering(){
+    const body=document.getElementById('numberingBody');
+    try{
+        // FIX (invoices not getting configured prefix/suffix): this used
+        // to read numbering_sequences directly via Supabase, bypassing
+        // the backend's tenant schema entirely — a save here could land
+        // in the wrong schema (or fail outright) while real invoice
+        // creation always read through the correctly tenant-scoped
+        // backend, so nothing configured here ever reached an actual
+        // invoice. GET /api/numbering/sequences does the same
+        // known-document-type synthesis this function used to do
+        // client-side, now server-side and tenant-scoped.
+        const data = await window.Api.get('/numbering/sequences');
+        numberingRows = (data||[]).map(r => ({
+            ...r,
+            // DB column is `padding`; this page has always called it
+            // number_length — mapped at the boundary, not renamed in
+            // the DB, since number-generator.ts already depends on
+            // `padding` as its real column name.
+            number_length: r.padding ?? r.number_length ?? 4,
+        }));
+        currentFinancialYearId = numberingRows[0]?.financial_year_id ?? null;
+        renderNumbering();
+    }catch(e){
+        body.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px;color:#c0392b;">Could not load numbering sequences.</td></tr>';
+    }
+}
+function renderNumbering(){
+    const body=document.getElementById('numberingBody');
+    if(!numberingRows.length){body.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px;color:#888;">No sequences configured.</td></tr>';return;}
+    body.innerHTML=numberingRows.map((r,idx)=>`<tr>
+        <td>${r.document_type}</td>
+        <td><input type="text" value="${r.prefix||''}" style="width:70px;" onchange="numberingRows[${idx}].prefix=this.value"></td>
+        <td><input type="text" value="${r.separator||''}" style="width:50px;" onchange="numberingRows[${idx}].separator=this.value"></td>
+        <td><input type="number" value="${r.next_number||0}" style="width:80px;" onchange="numberingRows[${idx}].next_number=parseInt(this.value)||0"></td>
+        <td><input type="number" value="${r.number_length||6}" style="width:60px;" onchange="numberingRows[${idx}].number_length=parseInt(this.value)||6"></td>
+        <td><input type="text" value="${r.suffix||''}" style="width:60px;" onchange="numberingRows[${idx}].suffix=this.value"></td>
+        <td><input type="checkbox" ${r.is_active?'checked':''} onchange="numberingRows[${idx}].is_active=this.checked"></td>
+        <td><button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="saveNumberingRow(${idx})">Save</button></td>
+    </tr>`).join('');
+    refreshOverviewFromLoadedData();
+}
+async function saveNumberingRow(idx){
+    const r=numberingRows[idx];
+    const payload={
+        prefix:r.prefix, separator:r.separator, nextNumber:r.next_number,
+        padding:r.number_length, suffix:r.suffix, isActive:r.is_active,
+    };
+    try{
+        if (r.id) {
+            const saved=await window.Api.patch('/numbering/sequences/'+r.id, payload);
+            numberingRows[idx]={...saved, number_length: saved.padding};
+            if(window.Audit) window.Audit.log('numbering_sequences', r.id, 'UPDATE', null, saved);
+        } else {
+            // FIX: this row was synthesized (no numbering_sequences row
+            // exists yet for this document type) — create it instead of
+            // trying to update a row that doesn't exist.
+            const saved=await window.Api.post('/numbering/sequences', {...payload, documentType:r.document_type});
+            numberingRows[idx]={...saved, number_length: saved.padding};
+            if(window.Audit) window.Audit.log('numbering_sequences', saved.id, 'CREATE', null, saved);
+        }
+        alert(r.document_type+' sequence saved.');
+    }catch(e){alert('Could not save: '+e.message);}
+}
+
+async function loadSettings(){
+    try{
+        const data = await window.Api.get('/settings');
+        if(data){
+            configId=data.id;
+            setField('sCompanyName',data.company_name);
+            setField('sLogoUrl',data.logo_path);
+            setField('sAddress',data.address);
+            setField('sState',data.company_state);
+            setField('sGst',data.gst_number);
+            setField('sPhone',data.support_phone);
+            setField('sEmail',data.support_email);
+            setField('sWebsite',data.website);
+            setField('sCurrency',data.currency||'INR');
+            setField('sFont',data.font_family||"'Segoe UI', sans-serif");
+            setField('sPdfStyle',data.pdf_template_style||'classic');
+            if(data.primary_color){setField('cPrimary',data.primary_color);document.getElementById('cPrimaryPicker').value=data.primary_color;}
+            if(data.secondary_color){setField('cSecondary',data.secondary_color);document.getElementById('cSecondaryPicker').value=data.secondary_color;}
+            if(data.background_color){setField('cBg',data.background_color);document.getElementById('cBgPicker').value=data.background_color;}
+            if(data.text_color){setField('cText',data.text_color);document.getElementById('cTextPicker').value=data.text_color;}
+            if(data.heading_color){setField('cHeading',data.heading_color);document.getElementById('cHeadingPicker').value=data.heading_color;}
+            if(data.card_color){setField('cCard',data.card_color);document.getElementById('cCardPicker').value=data.card_color;}
+            if(data.kpi_title_color){setField('cKpiTitle',data.kpi_title_color);document.getElementById('cKpiTitlePicker').value=data.kpi_title_color;}
+            if(data.kpi_content_color){setField('cKpiContent',data.kpi_content_color);document.getElementById('cKpiContentPicker').value=data.kpi_content_color;}
+            if(data.menu_color){setField('cMenu',data.menu_color);document.getElementById('cMenuPicker').value=data.menu_color;}
+            if(data.menu_text_color){setField('cMenuText',data.menu_text_color);document.getElementById('cMenuTextPicker').value=data.menu_text_color;}
+        }
+    }catch(e){
+        // FIX: this used to be catch(e){} — a completely silent
+        // failure. If loading settings failed for ANY reason
+        // (permission, network, a genuine backend error), the page
+        // just showed blank fields with zero indication anything was
+        // wrong — indistinguishable from "settings never saved" even
+        // when the save itself worked fine. Now the real error is
+        // visible, on the same banner Save already uses.
+        const eMsg=document.getElementById('errMsg');
+        if(eMsg){
+            eMsg.textContent = 'Could not load current settings: ' + (e.message || 'unknown error') + ' — showing blank fields, NOT actual saved values.';
+            eMsg.classList.add('show');
+        }
+        console.error('loadSettings failed:', e);
+    }
+    refreshOverviewFromLoadedData();
+}
+function setField(id,val){const el=document.getElementById(id);if(el&&val!=null)el.value=val;}
+function hexToRgba(hex, alpha){
+    const h = (hex||'#ffffff').replace('#','');
+    const full = h.length===3 ? h.split('').map(c=>c+c).join('') : h;
+    const r = parseInt(full.substring(0,2),16)||255;
+    const g = parseInt(full.substring(2,4),16)||255;
+    const b = parseInt(full.substring(4,6),16)||255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+function syncColor(picker,textId){document.getElementById(textId).value=picker.value;}
+function syncPicker(text,pickerId){
+    const p=document.getElementById(pickerId);
+    // FIX: only push a value into the color swatch if it's a real, complete
+    // hex code. Previously this ran on every keystroke, feeding partial
+    // text ("w", "wh", "whi"...) or plain color names ("white") into a
+    // color-picker input, which can only ever hold a 6-digit hex value —
+    // every other value was silently rejected by the browser, which is
+    // why the swatch never updated and the console filled with warnings.
+    if(/^#[0-9a-fA-F]{6}$/.test(text.value)){
+        p.value=text.value;
+    }
+}
+
+async function saveSettings(){
+    const btn=document.getElementById('saveBtn'),sMsg=document.getElementById('saveMsg'),eMsg=document.getElementById('errMsg');
+    sMsg.classList.remove('show');eMsg.classList.remove('show');btn.disabled=true;btn.textContent='Saving…';
+    const payload={
+        company_name:document.getElementById('sCompanyName').value.trim()||null,
+        logo_path:document.getElementById('sLogoUrl').value.trim()||null,
+        address:document.getElementById('sAddress').value.trim()||null,
+        company_state:document.getElementById('sState').value||null,
+        gst_number:document.getElementById('sGst').value.trim()||null,
+        support_phone:document.getElementById('sPhone').value.trim()||null,
+        support_email:document.getElementById('sEmail').value.trim()||null,
+        website:document.getElementById('sWebsite').value.trim()||null,
+        currency:document.getElementById('sCurrency').value,
+        font_family:document.getElementById('sFont').value,
+        pdf_template_style:document.getElementById('sPdfStyle').value,
+        primary_color:document.getElementById('cPrimary').value,
+        secondary_color:document.getElementById('cSecondary').value,
+        background_color:document.getElementById('cBg').value,
+        text_color:document.getElementById('cText').value,
+        heading_color:document.getElementById('cHeading').value,
+        card_color:document.getElementById('cCard').value,
+        kpi_title_color:document.getElementById('cKpiTitle').value,
+        kpi_content_color:document.getElementById('cKpiContent').value,
+        menu_color:document.getElementById('cMenu').value,
+        menu_text_color:document.getElementById('cMenuText').value,
+    };
+    try{
+        const saved = await window.Api.patch('/settings', payload);
+        configId = saved.id;
+        // Apply theme immediately
+        if(payload.primary_color)   document.documentElement.style.setProperty('--primary-color',payload.primary_color);
+        if(payload.secondary_color) document.documentElement.style.setProperty('--secondary-color',payload.secondary_color);
+        if(payload.background_color)document.documentElement.style.setProperty('--background-color',payload.background_color);
+        if(payload.font_family)     document.documentElement.style.setProperty('--font-family',payload.font_family);
+        if(payload.text_color)      document.documentElement.style.setProperty('--text-color',payload.text_color);
+        if(payload.heading_color)   document.documentElement.style.setProperty('--heading-color',payload.heading_color);
+        // Card color is stored as a plain hex (what the person picked),
+        // but applied as a translucent rgba — that's what actually makes
+        // the glass effect work. Storing the plain hex, not the rgba,
+        // means the color picker can show the person's real choice back
+        // to them next time, instead of a semi-transparent value that
+        // wouldn't render correctly in a <input type="color">.
+        if(payload.card_color)      document.documentElement.style.setProperty('--card-color', hexToRgba(payload.card_color, 0.55));
+        if(payload.kpi_title_color)   document.documentElement.style.setProperty('--kpi-title-color', payload.kpi_title_color);
+        if(payload.kpi_content_color) document.documentElement.style.setProperty('--kpi-content-color', payload.kpi_content_color);
+        if(payload.menu_color)      document.documentElement.style.setProperty('--menu-color',payload.menu_color);
+        if(payload.menu_text_color) document.documentElement.style.setProperty('--menu-text-color',payload.menu_text_color);
+        if(payload.company_name)document.getElementById('companyName').textContent=payload.company_name;
+        if(payload.logo_path){const l=document.getElementById('companyLogo');l.src=payload.logo_path;l.style.display='block';}
+        localStorage.setItem('portalTheme',JSON.stringify(payload));
+        // FIX: explicitly clear the OTHER message here, not just at the
+        // top of this function. Two overlapping save clicks could
+        // otherwise show both "Saved!" and "Failed!" at once — clearing
+        // only happened when a save *started*, so a slower-finishing
+        // earlier click could still set its own message after a faster
+        // second click had already shown its result.
+        eMsg.classList.remove('show');
+        sMsg.classList.add('show');setTimeout(()=>sMsg.classList.remove('show'),3000);
+    }catch(e){
+        sMsg.classList.remove('show');
+        eMsg.classList.add('show');setTimeout(()=>eMsg.classList.remove('show'),4000);
+    }
+    finally{btn.disabled=false;btn.textContent='Save Settings';}
+}
+function toggleGroup(el){el.classList.toggle('open');const sub=document.getElementById(el.id.replace('toggle','sub'));if(sub)sub.classList.toggle('open');}
+
+async function loadNotificationPrefs(){
+    try{
+        const data = await window.Api.get('/settings');
+        document.getElementById('notifyEmail').checked = data.notify_email_enabled !== false;
+        document.getElementById('notifySms').checked = !!data.notify_sms_enabled;
+        document.getElementById('notifyWhatsapp').checked = !!data.notify_whatsapp_enabled;
+        const enabledCount = [data.notify_email_enabled !== false, !!data.notify_sms_enabled, !!data.notify_whatsapp_enabled].filter(Boolean).length;
+        const ovEl = document.getElementById('ovNotifChannels');
+        if(ovEl) ovEl.textContent = enabledCount + ' of 3';
+    }catch(e){ /* leave defaults unchecked if this fails to load */ }
+}
+
+async function saveNotificationPrefs(){
+    const sMsg = document.getElementById('notifSaveMsg'), eMsg = document.getElementById('notifErrMsg');
+    sMsg.classList.remove('show'); eMsg.classList.remove('show');
+    try{
+        await window.Api.patch('/settings', {
+            notify_email_enabled: document.getElementById('notifyEmail').checked,
+            notify_sms_enabled: document.getElementById('notifySms').checked,
+            notify_whatsapp_enabled: document.getElementById('notifyWhatsapp').checked,
+        });
+        sMsg.classList.add('show'); setTimeout(()=>sMsg.classList.remove('show'),3000);
+    }catch(e){
+        eMsg.textContent = 'Failed to save: '+(e.message||'Unknown error');
+        eMsg.classList.add('show'); setTimeout(()=>eMsg.classList.remove('show'),4000);
+    }
+}
+
+async function downloadBackup(){
+    const sMsg = document.getElementById('backupSaveMsg'), eMsg = document.getElementById('backupErrMsg');
+    sMsg.classList.remove('show'); eMsg.classList.remove('show');
+    try{
+        await window.Api.downloadFile('/settings/backup-export');
+        sMsg.classList.add('show'); setTimeout(()=>sMsg.classList.remove('show'),3000);
+    }catch(e){
+        eMsg.textContent = 'Could not create backup: '+(e.message||'Unknown error');
+        eMsg.classList.add('show'); setTimeout(()=>eMsg.classList.remove('show'),4000);
+    }
+}
+function showSettingsTab(tab){
+    document.querySelectorAll('.settings-tab[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('.settings-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+}
+
+// FIX: Overview cards use only real, already-available data — no
+// fabricated numbers. Employees/Roles come from endpoints that
+// already exist; Numbering Series and PDF Style reuse data this page
+// already loads elsewhere (loadNumbering(), loadSettings()) rather
+// than fetching it twice.
+async function loadOverview(){
+    try{
+        const [employees, roles, permissions] = await Promise.all([
+            window.Api.get('/employees').catch(() => []),
+            window.Api.get('/roles').catch(() => []),
+            window.Api.get('/permissions').catch(() => []),
+        ]);
+        document.getElementById('ovEmployees').textContent = employees.length;
+        document.getElementById('ovRoles').textContent = roles.length;
+        document.getElementById('ovPermissions').textContent = permissions.length;
+    }catch(e){ /* leave as — if any of these fail (e.g. permission denied) */ }
+}
+
+function refreshOverviewFromLoadedData(){
+    // Called after loadSettings()/loadNumbering() populate their own
+    // fields, so the Overview cards reflect the same real data instead
+    // of a third, separate fetch.
+    const gstEl = document.getElementById('sGst');
+    if(gstEl && gstEl.value) document.getElementById('ovGst').textContent = gstEl.value;
+    const pdfEl = document.getElementById('sPdfStyle');
+    if(pdfEl) document.getElementById('ovPdfStyle').textContent = pdfEl.options[pdfEl.selectedIndex].text;
+    if(typeof numberingRows !== 'undefined' && numberingRows.length){
+        const active = numberingRows.filter(r => r.is_active !== false).slice(0, 4);
+        document.getElementById('ovNumberingList').innerHTML = active.map(r =>
+            `<div>${r.document_type}: <b>${r.prefix||''}</b></div>`
+        ).join('') || 'No sequences configured.';
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){localStorage.removeItem('loggedEmployee');window.location.href='business-login.html';}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/validation.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

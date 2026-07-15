@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Role Permissions</title>
+<script>(function(){try{var t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .role-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+  .role-tab { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 14px; }
+  .role-tab.active { background: var(--primary-color, #2563eb); color: #fff; border-color: var(--primary-color, #2563eb); }
+  .system-badge { font-size: 11px; background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
+  .denied-banner { background: #fef2f2; color: #991b1b; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+
+  /* FIX (Roles & Permissions redesign): the collapsible-checkbox-list
+     UI is replaced with a real matrix — one row per module, one column
+     per access tier (Module/Permission | View | Edit | Full Access |
+     No Access). Equal column widths via table-layout:fixed rather than
+     letting content width drive column sizing, which is what actually
+     causes uneven, hard-to-scan columns in a permission grid. */
+  .perm-matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .perm-matrix th, .perm-matrix td {
+    padding: 12px 10px; text-align: center; border-bottom: 1px solid #eef0f4; font-size: 13px;
+  }
+  .perm-matrix th:first-child, .perm-matrix td:first-child { text-align: left; width: 34%; }
+  .perm-matrix th { color: #667; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; background: rgba(0,0,0,0.02); }
+  .perm-matrix td:first-child { font-weight: 600; color: #222; }
+  .perm-matrix td:first-child .perm-desc { display: block; font-weight: 400; color: #8a93a6; font-size: 12px; margin-top: 2px; }
+  .tier-radio {
+    width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary-color, #4a6cf7);
+  }
+  .tier-radio:disabled { cursor: not-allowed; opacity: 0.4; }
+  .perm-matrix tr:hover td { background: rgba(74, 108, 247, 0.03); }
+  @media (max-width: 700px) {
+    .perm-matrix, .perm-matrix thead, .perm-matrix tbody, .perm-matrix th, .perm-matrix td, .perm-matrix tr { display: block; }
+    .perm-matrix thead { display: none; }
+    .perm-matrix tr { border: 1px solid #eef0f4; border-radius: 8px; margin-bottom: 10px; padding: 8px 0; }
+    .perm-matrix td { text-align: left; padding: 6px 12px; }
+    .perm-matrix td:not(:first-child)::before { content: attr(data-tier-label) ": "; font-weight: 600; color: #667; margin-right: 6px; }
+    .perm-matrix td:not(:first-child) { display: flex; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Role Permissions</h2>
+  </div>
+
+  <!--
+    Real RBAC management screen, wired to the real backend
+    (/api/roles, /api/permissions, /api/roles/:id/permissions) --
+    the same API that has enforced every permission check throughout
+    this application all along, but which had zero frontend consumer
+    until now. Replaces a previous version of this page that wrote
+    directly to Supabase using invented role names disconnected from
+    this system entirely (found during a production-readiness audit).
+
+    MATRIX REDESIGN: the underlying permission model is (mostly) two
+    real permissions per module-feature — "<module>.<feature>.view" and
+    "<module>.<feature>.manage" — plus, for a handful of features, extra
+    workflow permissions beyond those two (e.g. "accounting.journal_
+    entry.post", "attendance.correction.approve", "leave.balance.adjust").
+    There's no native "View/Edit/Full Access/No Access" enum in the
+    data — this UI computes those four tiers FROM the real permissions
+    each feature actually has, per row:
+      No Access    = nothing granted
+      View         = only .view granted
+      Edit         = .view + .manage granted
+      Full Access  = .view + .manage + every extra permission granted
+    For a feature with no "extra" permissions beyond view/manage, Edit
+    and Full Access are the same end state — that's not a bug, there's
+    genuinely nothing more to grant. Selecting a tier issues exactly
+    the grant/revoke calls needed to reach that end state, reusing the
+    same single-permission POST/DELETE endpoint every checkbox used
+    before — no new backend logic, no new risk.
+  -->
+  <div id="deniedBanner" class="denied-banner" style="display:none;">
+    You don't have permission to view or manage roles (requires <code>admin.rbac.view</code>).
+  </div>
+
+  <div id="permissionsUi" style="display:none;">
+    <div class="role-tabs" id="roleTabs"></div>
+    <div id="permsArea">
+      <div style="text-align:center;padding:60px;color:#aaa;font-size:14px;">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+<script>
+let roles = [];
+let permissionsCatalog = [];
+let activeRoleId = null;
+let grantedPermissionIds = new Set();
+
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){const sidebar=document.getElementById('sidebar');if(sidebar)sidebar.classList.remove('mobile-open');const overlay=document.getElementById('sidebarOverlay');if(overlay)overlay.classList.remove('active');}
+function logout(){ if(window.Auth) window.Auth.logout(); else { localStorage.removeItem('loggedEmployee'); window.top.location.href='/business-login.html'; } }
+
+window.addEventListener('DOMContentLoaded', async function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) {
+    const stored = localStorage.getItem('loggedEmployee');
+    if (!stored) { window.top.location.href = '/business-login.html'; return; }
+  }
+  const emp = window.Auth ? window.Auth.getEmployee() : JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+  if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||emp.name||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+  setupSidebar();
+
+  try {
+    const [roleList, catalog] = await Promise.all([
+      window.Api.get('/roles'),
+      window.Api.get('/permissions'),
+    ]);
+    roles = roleList || [];
+    permissionsCatalog = catalog || [];
+    document.getElementById('permissionsUi').style.display = 'block';
+    renderTabs();
+    if (roles.length > 0) await selectRole(roles[0].id);
+  } catch (e) {
+    if (e.status === 403) {
+      document.getElementById('deniedBanner').style.display = 'block';
+    } else {
+      document.getElementById('permsArea').innerHTML =
+        '<div class="empty-state">Could not load roles/permissions: ' + (e.message || 'unknown error') + '</div>';
+      document.getElementById('permissionsUi').style.display = 'block';
+    }
+  }
+});
+
+function renderTabs(){
+  const tabs = document.getElementById('roleTabs');
+  tabs.innerHTML = roles.map(r => `
+    <button class="role-tab ${String(r.id)===String(activeRoleId)?'active':''}" onclick="selectRole('${r.id}')">
+      ${escapeHtml(r.role_name)}${r.is_system ? '<span class="system-badge">system</span>' : ''}
+    </button>
+  `).join('');
+}
+
+async function selectRole(roleId){
+  activeRoleId = roleId;
+  renderTabs();
+  const area = document.getElementById('permsArea');
+  area.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;">Loading permissions…</div>';
+  try {
+    const result = await window.Api.get(`/roles/${roleId}/permissions`);
+    grantedPermissionIds = new Set((result.permissionIds || []).map(String));
+    renderPerms();
+  } catch (e) {
+    area.innerHTML = '<div class="empty-state">Could not load this role\'s permissions: ' + (e.message || 'unknown error') + '</div>';
+  }
+}
+
+function renderPerms(){
+  const area = document.getElementById('permsArea');
+  // Group by "feature" (module + the part before the final .view/.manage/
+  // etc segment) rather than just by module — a module like "hr" has many
+  // distinct features (department, designation, leave_type, ...), each
+  // needing its own row and its own tier, not one row per whole module.
+  const byFeature = {};
+  for (const p of permissionsCatalog) {
+    const parts = p.permission_code.split('.');
+    const action = parts[parts.length - 1];
+    const featureKey = parts.slice(0, -1).join('.');
+    if (!byFeature[featureKey]) byFeature[featureKey] = { module: p.module, featureKey, view: null, manage: null, extras: [] };
+    if (action === 'view') byFeature[featureKey].view = p;
+    else if (action === 'manage') byFeature[featureKey].manage = p;
+    else byFeature[featureKey].extras.push(p);
+  }
+  const features = Object.values(byFeature).sort((a, b) => a.featureKey.localeCompare(b.featureKey));
+
+  function tierOf(f){
+    const viewGranted = f.view && grantedPermissionIds.has(String(f.view.id));
+    const manageGranted = f.manage && grantedPermissionIds.has(String(f.manage.id));
+    const extrasGranted = f.extras.length > 0 && f.extras.every(e => grantedPermissionIds.has(String(e.id)));
+    const anyExtraGranted = f.extras.some(e => grantedPermissionIds.has(String(e.id)));
+    if (!viewGranted && !manageGranted && !anyExtraGranted) return 'none';
+    if (viewGranted && !manageGranted) return 'view';
+    if (viewGranted && manageGranted && (f.extras.length === 0 || extrasGranted)) return 'full';
+    if (viewGranted && manageGranted) return 'edit';
+    return 'edit'; // manage without view somehow granted directly — treat as Edit, View gets added when reaching this tier anyway
+  }
+
+  area.innerHTML = `
+    <table class="perm-matrix">
+      <thead><tr><th>Module / Permission</th><th>View</th><th>Edit</th><th>Full Access</th><th>No Access</th></tr></thead>
+      <tbody>
+        ${features.map(f => {
+          const tier = tierOf(f);
+          const label = f.featureKey.replace(/_/g, ' ').replace(/\./g, ' — ');
+          const desc = f.view?.description || f.manage?.description || '';
+          const featureKeyAttr = f.featureKey.replace(/'/g, "\\'");
+          return `<tr>
+            <td>${escapeHtml(label)}${desc ? `<span class="perm-desc">${escapeHtml(desc)}</span>` : ''}</td>
+            <td data-tier-label="View"><input type="radio" class="tier-radio" name="tier_${escapeHtml(f.featureKey)}" ${tier==='view'?'checked':''} ${!f.view?'disabled':''} onchange="setFeatureTier('${featureKeyAttr}','view')"></td>
+            <td data-tier-label="Edit"><input type="radio" class="tier-radio" name="tier_${escapeHtml(f.featureKey)}" ${tier==='edit'?'checked':''} ${!f.manage?'disabled':''} onchange="setFeatureTier('${featureKeyAttr}','edit')"></td>
+            <td data-tier-label="Full Access"><input type="radio" class="tier-radio" name="tier_${escapeHtml(f.featureKey)}" ${tier==='full'?'checked':''} onchange="setFeatureTier('${featureKeyAttr}','full')"></td>
+            <td data-tier-label="No Access"><input type="radio" class="tier-radio" name="tier_${escapeHtml(f.featureKey)}" ${tier==='none'?'checked':''} onchange="setFeatureTier('${featureKeyAttr}','none')"></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+  window.__permFeatures = byFeature; // stashed for setFeatureTier() to look up without re-deriving
+}
+
+/**
+ * Moves one feature row to the tier the person clicked, issuing exactly
+ * the grant/revoke calls needed — reuses the same single-permission
+ * POST/DELETE endpoint every checkbox used before this redesign.
+ */
+async function setFeatureTier(featureKey, tier){
+  const f = window.__permFeatures[featureKey];
+  if (!f) return;
+  const wantView = tier === 'view' || tier === 'edit' || tier === 'full';
+  const wantManage = tier === 'edit' || tier === 'full';
+  const wantExtras = tier === 'full';
+
+  const changes = [];
+  if (f.view) changes.push([f.view, wantView]);
+  if (f.manage) changes.push([f.manage, wantManage]);
+  for (const e of f.extras) changes.push([e, wantExtras]);
+
+  const radios = document.querySelectorAll(`input[name="tier_${CSS.escape(featureKey)}"]`);
+  radios.forEach(r => r.disabled = true);
+  try {
+    for (const [perm, shouldGrant] of changes) {
+      const isGranted = grantedPermissionIds.has(String(perm.id));
+      if (shouldGrant && !isGranted) {
+        await window.Api.post(`/roles/${activeRoleId}/permissions`, { permissionId: Number(perm.id) });
+        grantedPermissionIds.add(String(perm.id));
+      } else if (!shouldGrant && isGranted) {
+        await window.Api.delete(`/roles/${activeRoleId}/permissions/${perm.id}`);
+        grantedPermissionIds.delete(String(perm.id));
+      }
+    }
+    if (window.Audit) window.Audit.log('role_permissions', activeRoleId, 'UPDATE', null, { feature: featureKey, tier });
+    if (window.Toast) window.Toast.show(`${featureKey.replace(/_/g,' ')}: ${tier === 'none' ? 'No Access' : tier}`);
+  } catch (e) {
+    alert('Could not update access: ' + (e.message || 'unknown error'));
+  }
+  renderPerms();
+}
+
+</script>
+</body>
+</html>

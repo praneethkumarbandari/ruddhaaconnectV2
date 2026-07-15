@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Debit Notes</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Debit Notes</h2>
+        <button class="btn-primary" onclick="openModal()">＋ New Debit Note</button>
+    </div>
+    <!--
+      NOTE: this page did not exist anywhere in the original shell.
+      Built new.
+
+      UPDATE: a later pass added POST /:id/cancel to the backend
+      (src/routes/notes.ts / src/lib/notes.ts), reversing what this
+      comment used to describe as a "documented, deliberate V1 scope
+      boundary." That reversal was a judgment call, not a confirmed
+      product decision: every other voucher type (invoices, receipts,
+      payments) has always had a cancel path, and NoteHasAllocationsError's
+      sibling classes on receipts/payments literally say "remove or
+      reverse the allocation(s) first" — evidence the gap was more
+      likely an oversight than an intentional scope cut. Flagging that
+      tension explicitly rather than asserting either reading with
+      confidence.
+
+      The UI below still has no Cancel button on purpose — the backend
+      capability existing is a low-risk, reversible addition; adding a
+      visible action changes what staff can actually do day to day, and
+      that deserves real product sign-off rather than a unilateral call.
+      There is also still no single-record GET /:id for debit notes —
+      "View" below is a detail panel over data already in the list
+      response.
+    -->
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Note No.</th><th>Date</th><th>Vendor</th><th>Against Invoice</th><th>Subtotal</th><th>GST</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="9" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="viewModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Debit Note Detail</h3><button class="modal-header-close" onclick="document.getElementById('viewModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body" id="viewBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="createModal">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header"><h3>New Debit Note</h3><button class="modal-header-close" onclick="document.getElementById('createModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="modalMsg"></div>
+      <div class="field-row">
+        <div class="field"><label>Vendor *</label><select id="fVendor" onchange="onVendorChange()"><option value="">Select vendor…</option></select></div>
+        <div class="field"><label>Note Date *</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="field"><label>Against Invoice (optional)</label><select id="fAgainstInvoice"><option value="">Not linked to a specific invoice</option></select></div>
+      <div class="field"><label>Narration</label><input type="text" id="fNarration" placeholder="e.g. Return of damaged goods"></div>
+
+      <table style="margin-top:12px;">
+        <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>GST %</th><th>Line Total</th><th></th></tr></thead>
+        <tbody id="linesBody"></tbody>
+      </table>
+      <button class="btn-secondary" onclick="addLine()" style="margin-top:8px;">+ Add Line</button>
+      <div style="text-align:right;margin-top:12px;font-weight:700;">Total: ₹<span id="sumTotal">0.00</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="saveNote()">Save &amp; Post</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allRows=[], custInvoices=[], lines=[{description:'',qty:1,rate:0,gstRate:18}];
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadNotes();
+});
+
+async function loadNotes(){
+    try{
+        allRows = await window.Api.get('/debit-notes');
+        renderTable(allRows);
+    }catch(e){
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="9" class="empty-state">Could not load debit notes: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function renderTable(rows){
+    const tbody = document.getElementById('tableBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No debit notes found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td>${r.debit_note_no||'(draft)'}</td>
+        <td>${r.note_date?new Date(r.note_date).toLocaleDateString('en-IN'):'—'}</td>
+        <td>${escapeHtml(r.vendor_name)||('#'+r.vendor_id)}</td>
+        <td>${r.against_invoice_id?'#'+r.against_invoice_id:'—'}</td>
+        <td>₹${fmt(r.subtotal)}</td>
+        <td>₹${fmt(r.gst_amount)}</td>
+        <td>₹${fmt(r.total)}</td>
+        <td><span class="badge ${r.status}">${r.status}</span></td>
+        <td>
+            ${r.status==='draft'?`<button class="action-btn" onclick="postNote('${r.id}')"><i class="fa-solid fa-check"></i> Post</button>`:''}
+            <button class="action-btn" onclick="viewNote('${r.id}')"><i class="fa-solid fa-eye"></i> View</button>
+        </td>
+    </tr>`).join('');
+}
+function viewNote(id){
+    const r = allRows.find(x=>String(x.id)===String(id));
+    if(!r) return;
+    document.getElementById('viewBody').innerHTML = `
+        <p><b>Note No.:</b> ${r.debit_note_no||'(draft)'}</p>
+        <p><b>Date:</b> ${r.note_date?new Date(r.note_date).toLocaleDateString('en-IN'):'—'}</p>
+        <p><b>Vendor:</b> ${escapeHtml(r.vendor_name)||'—'}</p>
+        <p><b>Against Invoice:</b> ${r.against_invoice_id?'#'+r.against_invoice_id:'Not linked'}</p>
+        <p><b>Narration:</b> ${escapeHtml(r.narration)||'—'}</p>
+        <p><b>Subtotal:</b> ₹${fmt(r.subtotal)}</p>
+        <p><b>GST:</b> ₹${fmt(r.gst_amount)}</p>
+        <p><b>Total:</b> ₹${fmt(r.total)}</p>
+        <p><b>Status:</b> ${r.status}</p>
+    `;
+    document.getElementById('viewModal').classList.add('active');
+}
+async function postNote(id){
+    if(!confirm('Post this debit note? This creates a real, permanent journal entry.')) return;
+    try{ await window.Api.post('/debit-notes/'+id+'/post'); loadNotes(); }
+    catch(e){ alert('Could not post: '+(e.message||'Unknown error')); }
+}
+
+async function openModal(){
+    document.getElementById('fDate').valueAsDate = new Date();
+    document.getElementById('fNarration').value = '';
+    document.getElementById('modalMsg').textContent = '';
+    lines = [{description:'',qty:1,rate:0,gstRate:18}];
+    custInvoices = [];
+    try{
+        const vendors = await window.Api.get('/vendors');
+        document.getElementById('fVendor').innerHTML = '<option value="">Select vendor…</option>' + vendors.filter(c=>c.is_active!==false).map(c=>`<option value="${c.id}">${escapeHtml(c.vendor_name)}</option>`).join('');
+    }catch(e){}
+    document.getElementById('fAgainstInvoice').innerHTML = '<option value="">Not linked to a specific invoice</option>';
+    renderLines();
+    document.getElementById('createModal').classList.add('active');
+}
+async function onVendorChange(){
+    const vendorId = document.getElementById('fVendor').value;
+    const sel = document.getElementById('fAgainstInvoice');
+    sel.innerHTML = '<option value="">Not linked to a specific invoice</option>';
+    if(!vendorId) return;
+    try{
+        const all = await window.Api.get('/purchase-invoices?status=posted');
+        const filtered = all.filter(i => String(i.vendor_id) === String(vendorId));
+        sel.innerHTML += filtered.map(inv=>`<option value="${inv.id}">${inv.invoice_no} — ₹${fmt(inv.total)}</option>`).join('');
+    }catch(e){}
+}
+function renderLines(){
+    document.getElementById('linesBody').innerHTML = lines.map((l,i)=>{
+        const lt=(l.qty||0)*(l.rate||0), gst=lt*((l.gstRate||0)/100);
+        return `<tr>
+        <td><input type="text" value="${l.description||''}" data-idx="${i}" data-field="description" style="width:100%;padding:6px;"></td>
+        <td><input type="number" value="${l.qty||''}" min="0" step="0.01" data-idx="${i}" data-field="qty" style="width:80px;padding:6px;"></td>
+        <td><input type="number" value="${l.rate||''}" min="0" step="0.01" data-idx="${i}" data-field="rate" style="width:100px;padding:6px;"></td>
+        <td><input type="number" value="${l.gstRate||0}" min="0" step="0.01" data-idx="${i}" data-field="gstRate" style="width:70px;padding:6px;"></td>
+        <td>₹${fmt(lt+gst)}</td>
+        <td><button data-remove="${i}" style="background:none;border:0;color:#c0392b;cursor:pointer;"><i class="fa-solid fa-trash"></i> </button></td>
+    </tr>`;}).join('');
+    updateTotals();
+}
+function updateTotals(){
+    let total=0;
+    lines.forEach(l=>{ const lt=(l.qty||0)*(l.rate||0); total += lt + lt*((l.gstRate||0)/100); });
+    document.getElementById('sumTotal').textContent = fmt(total);
+}
+document.addEventListener('input', function(e){
+    const idx = e.target.getAttribute('data-idx'); const field = e.target.getAttribute('data-field');
+    if(idx===null || !field || !document.getElementById('createModal').classList.contains('active')) return;
+    lines[idx][field] = field==='description' ? e.target.value : (parseFloat(e.target.value)||0);
+    updateTotals();
+});
+document.addEventListener('click', function(e){
+    const removeIdx = e.target.getAttribute('data-remove');
+    if(removeIdx!==null && document.getElementById('createModal').classList.contains('active')){ lines.splice(parseInt(removeIdx),1); renderLines(); }
+});
+function addLine(){ lines.push({description:'',qty:1,rate:0,gstRate:18}); renderLines(); }
+
+async function saveNote(){
+    const vendorId = document.getElementById('fVendor').value;
+    const noteDate = document.getElementById('fDate').value;
+    const againstInvoiceId = document.getElementById('fAgainstInvoice').value;
+    const narration = document.getElementById('fNarration').value.trim();
+    const msg = document.getElementById('modalMsg');
+    if(!vendorId){ msg.textContent='Please select a vendor.'; return; }
+    if(!noteDate){ msg.textContent='Note date is required.'; return; }
+    const validLines = lines.filter(l=>l.description && l.qty>0 && l.rate>=0);
+    if(!validLines.length){ msg.textContent='At least one line item is required.'; return; }
+    try{
+        const note = await window.Api.post('/debit-notes', {
+            vendorId: Number(vendorId), noteDate,
+            againstInvoiceId: againstInvoiceId ? Number(againstInvoiceId) : undefined,
+            lines: validLines.map(l=>({ description: l.description, qty: l.qty, rate: l.rate, gstRate: l.gstRate||0 })),
+            narration: narration || undefined,
+        });
+        await window.Api.post('/debit-notes/'+note.id+'/post');
+        document.getElementById('createModal').classList.remove('active');
+        alert('Debit note '+(note.debit_note_no||note.id)+' created and posted.');
+        loadNotes();
+    }catch(e){
+        msg.textContent = 'Could not save debit note: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

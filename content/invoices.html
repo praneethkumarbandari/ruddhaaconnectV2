@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Invoices</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Sales Invoices</h2>
+        <button class="btn-primary" onclick="window.location.href='invoices-create.html'">＋ New Invoice</button>
+    </div>
+    <!--
+      NOTE: the original version of this page reimplemented the entire
+      posting engine client-side — writing journal_entries and
+      journal_entry_lines directly, managing its own numbering
+      sequence, and doing reversal math by hand, all against raw
+      Supabase tables. Accounting V1's architecture requires every
+      posting to go through exactly one server-side function
+      (postJournalEntry() — see the project's posting-engine
+      philosophy), so none of that client-side logic is compatible or
+      safe to keep. This page now only calls the real endpoints and
+      lets the server own every part of the accounting: POST
+      /:id/post and POST /:id/cancel.
+    -->
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Search invoices…" oninput="filterTable()">
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Type</th><th>Invoice No.</th><th>Date</th><th>Customer / Vendor</th><th>Subtotal</th><th>GST</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="9" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="viewModal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 id="viewModalTitle">Invoice</h3>
+      <button class="modal-close" onclick="closeViewModal()">✕</button>
+    </div>
+    <div class="modal-body" id="viewModalBody"></div>
+  </div>
+</div>
+
+<script>
+let allRows=[];
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadInvoices();
+});
+
+const SOURCES = [
+    { type:'Sales',        endpoint:'/sales-invoices',    party:r=>r.customer_name||('#'+r.customer_id) },
+    { type:'Purchase',     endpoint:'/purchase-invoices', party:r=>r.vendor_name||('#'+r.vendor_id) },
+    { type:'Credit Note',  endpoint:'/credit-notes',      party:r=>r.customer_name||('#'+r.customer_id) },
+    { type:'Debit Note',   endpoint:'/debit-notes',       party:r=>r.vendor_name||('#'+r.vendor_id) },
+];
+
+async function loadInvoices(){
+    try{
+        const results = await Promise.all(SOURCES.map(s => window.Api.get(s.endpoint).catch(() => [])));
+        allRows = results.flatMap((rows, i) => rows.map(r => ({
+            ...r,
+            _type: SOURCES[i].type,
+            _endpoint: SOURCES[i].endpoint,
+            _partyName: SOURCES[i].party(r),
+            _sortDate: r.invoice_date || r.note_date,
+        })));
+        allRows.sort((a,b) => new Date(b._sortDate||0) - new Date(a._sortDate||0));
+        renderTable(allRows);
+    }catch(e){
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="9" class="empty-state">Could not load invoices: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function filterTable(){
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    renderTable(!q ? allRows : allRows.filter(r => JSON.stringify(r).toLowerCase().includes(q)));
+}
+function renderTable(rows){
+    const tbody = document.getElementById('tableBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No invoices found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => {
+        let actions = `<button class="action-btn" onclick="viewInvoice('${r._endpoint}','${r.id}','${r._type}')"><i class="fa-solid fa-eye"></i> View</button>`;
+        if(r.status === 'draft'){
+            // FIX (Invoice List Actions): draft invoices had no Edit path
+            // at all. Posted invoices deliberately get NO Edit button here
+            // — only View + Reverse — so they stay immutable; this branch
+            // is the only place Edit can ever appear.
+            if(r._type === 'Sales' || r._type === 'Purchase'){
+                actions += ` <button class="action-btn" onclick="editInvoice('${r._endpoint}','${r.id}','${r._type}')"><i class="fa-solid fa-pen"></i> Edit</button>`;
+            }
+            actions += ` <button class="action-btn" onclick="postInvoice('${r._endpoint}','${r.id}')"><i class="fa-solid fa-check"></i> Post</button>`;
+        } else if(r.status === 'posted'){
+            actions += ` <button class="action-btn" onclick="cancelInvoice('${r._endpoint}','${r.id}')"><i class="fa-solid fa-rotate-left"></i> Reverse</button>`;
+        }
+        if(r._type === 'Sales' || r._type === 'Purchase'){
+            actions += ` <button class="action-btn" onclick="downloadInvoicePdf('${r._endpoint}','${r.id}','${r.invoice_no||r.id}')"><i class="fa-solid fa-download"></i> PDF</button>`;
+        }
+        return `<tr>
+            <td><span class="badge">${r._type}</span></td>
+            <td>${r.invoice_no||r.purchase_no||r.note_no||'(draft)'}</td>
+            <td>${r._sortDate?new Date(r._sortDate).toLocaleDateString('en-IN'):'—'}</td>
+            <td>${r._partyName}</td>
+            <td>₹${fmt(r.subtotal)}</td>
+            <td>₹${fmt(r.gst_amount)}</td>
+            <td>₹${fmt(r.total)}</td>
+            <td><span class="badge ${r.status}">${r.status}</span></td>
+            <td>${actions}</td>
+        </tr>`;
+    }).join('');
+}
+// FIX: drafts had no way to be reviewed at all before posting — only
+// Post and PDF existed, and PDF only worked for Sales/Purchase, not
+// notes. GET /:id (endpoint+'/'+id) already existed on the backend
+// and was never called from anywhere in this file. This is
+// deliberately read-only — there's no PATCH/edit endpoint for a
+// draft on the backend at all yet, so editing a saved draft is a
+// separate, bigger feature to build if wanted, not something this
+// modal can safely offer.
+async function viewInvoice(endpoint, id, type){
+    const modal = document.getElementById('viewModal');
+    const body = document.getElementById('viewModalBody');
+    document.getElementById('viewModalTitle').textContent = type + ' Invoice';
+    body.innerHTML = '<p style="text-align:center;color:#aaa;padding:20px;">Loading…</p>';
+    modal.classList.add('active');
+    try{
+        const inv = await window.Api.get(endpoint+'/'+id);
+        const lines = inv.lines || [];
+        const rows = lines.map(l => `<tr>
+            <td>${escapeHtml(l.description)}</td>
+            <td>${l.qty}</td>
+            <td>₹${fmt(l.rate)}</td>
+            <td>${l.gst_rate}%</td>
+            <td>₹${fmt(l.line_amount)}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="empty-state">No line items.</td></tr>';
+        body.innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <div><strong>Number:</strong> ${inv.invoice_no || inv.note_no || '(draft — not yet posted)'}</div>
+                <div><strong>Status:</strong> <span class="badge ${inv.status}">${inv.status}</span></div>
+                <div><strong>Date:</strong> ${inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString('en-IN') : '—'}</div>
+                <div><strong>Customer/Vendor:</strong> ${escapeHtml(inv.customer_name || inv.vendor_name || '—')}</div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>GST%</th><th>Amount</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <div style="margin-top:14px;text-align:right;font-size:14px;">
+                <div>Subtotal: ₹${fmt(inv.subtotal)}</div>
+                <div>GST: ₹${fmt(inv.gst_amount)}</div>
+                <div style="font-weight:700;">Total: ₹${fmt(inv.total)}</div>
+            </div>
+            ${inv.narration ? `<div style="margin-top:10px;color:#666;font-size:13px;"><strong>Narration:</strong> ${escapeHtml(inv.narration)}</div>` : ''}
+        `;
+    }catch(e){
+        body.innerHTML = '<p style="color:#c0392b;text-align:center;padding:20px;">Could not load: '+(e.message||'Unknown error')+'</p>';
+    }
+}
+function closeViewModal(){ document.getElementById('viewModal').classList.remove('active'); }
+async function postInvoice(endpoint, id){
+    if(!confirm('Post this invoice? This creates a real, permanent journal entry.')) return;
+    try{
+        await window.Api.post(endpoint+'/'+id+'/post');
+        loadInvoices();
+    }catch(e){ alert('Could not post: '+(e.message||'Unknown error')); }
+}
+function editInvoice(endpoint, id, type){
+    const typeKey = type === 'Sales' ? 'sales' : type === 'Purchase' ? 'purchase' : null;
+    if (!typeKey) return; // Edit is only offered for Sales/Purchase rows in the first place — see renderTable()
+    window.top.location.href = '/invoices-create.html?editEndpoint=' + encodeURIComponent(endpoint) + '&editId=' + encodeURIComponent(id) + '&type=' + typeKey;
+}
+async function cancelInvoice(endpoint, id){
+    const reason = prompt('Reason for reversing this invoice:');
+    if(reason===null) return;
+    if(!reason.trim()){ alert('A reason is required.'); return; }
+    try{
+        await window.Api.post(endpoint+'/'+id+'/reverse', { reason: reason.trim() });
+        loadInvoices();
+    }catch(e){ alert('Could not reverse: '+(e.message||'Unknown error')); }
+}
+async function downloadInvoicePdf(endpoint, id, docNo){
+    try{
+        await window.Api.downloadFile(endpoint+'/'+id+'/pdf', 'invoice-'+docNo+'.pdf');
+    }catch(e){ alert('Could not download PDF: '+(e.message||'Unknown error')); }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

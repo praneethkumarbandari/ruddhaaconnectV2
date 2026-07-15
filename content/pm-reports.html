@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Financial Reports</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+.pm-tabs { display:flex; flex-wrap:wrap; gap:4px; border-bottom:2px solid #eee; margin-bottom:16px; }
+.pm-tab { padding:10px 14px; cursor:pointer; font-size:13px; font-weight:600; color:#888; border-bottom:2px solid transparent; margin-bottom:-2px; }
+.pm-tab.active { color:var(--primary-color,#3b5bfd); border-bottom-color:var(--primary-color,#3b5bfd); }
+.pm-panel { display:none; }
+.pm-panel.active { display:block; }
+.pm-section { background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px)); border-radius:10px; padding:16px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
+.pm-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:13px; }
+@media print { .no-print { display:none !important; } .main { padding:0 !important; } }
+</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header no-print">
+        <h2>Project Financial Reports</h2>
+    </div>
+
+    <div class="pm-section no-print">
+        <div class="field-row">
+            <div class="field"><label>Project *</label><select id="fProject" onchange="onFiltersChanged()"><option value="">Select project…</option></select></div>
+            <div class="field"><label>Financial Year</label><select id="fFinYear" onchange="onFinYearChanged()"><option value="">Custom range</option></select></div>
+            <div class="field"><label>From</label><input type="date" id="fFrom" onchange="loadActiveTab()"></div>
+            <div class="field"><label>To</label><input type="date" id="fTo" onchange="loadActiveTab()"></div>
+        </div>
+        <p style="font-size:12px;color:#888;">Selecting a Financial Year fills in its real start/end dates below — it does not change how any figure is calculated, only the date range sent to the report.</p>
+    </div>
+
+    <div class="pm-tabs no-print" id="tabBar">
+        <div class="pm-tab active" data-tab="budget">Budget vs Actual</div>
+        <div class="pm-tab" data-tab="revenue">Revenue</div>
+        <div class="pm-tab" data-tab="cost">Cost</div>
+        <div class="pm-tab" data-tab="profit">Gross &amp; Net Profit</div>
+        <div class="pm-tab" data-tab="cashflow">Cash Flow</div>
+        <div class="pm-tab" data-tab="outstanding">Outstanding</div>
+        <div class="pm-tab" data-tab="timeline">Financial Timeline</div>
+    </div>
+
+    <div class="pm-panel active" id="panel-budget"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Budget vs Actual</h3><button class="btn-secondary" onclick="exportBudget()">Export CSV</button></div>
+        <div id="budgetBody">Select a project to view.</div>
+    </div></div>
+
+    <div class="pm-panel" id="panel-revenue"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Revenue</h3><button class="btn-secondary" onclick="exportRevenue()">Export CSV</button></div>
+        <div id="revenueBody">Select a project to view.</div>
+    </div></div>
+
+    <div class="pm-panel" id="panel-cost"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Cost</h3><button class="btn-secondary" onclick="exportCost()">Export CSV</button></div>
+        <div id="costBody">Select a project to view.</div>
+    </div></div>
+
+    <div class="pm-panel" id="panel-profit"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Gross &amp; Net Profit</h3><button class="btn-secondary" onclick="exportProfit()">Export CSV</button></div>
+        <div id="profitBody">Select a project to view.</div>
+    </div></div>
+
+    <div class="pm-panel" id="panel-cashflow"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Cash Flow</h3><button class="btn-secondary" onclick="exportCashflow()">Export CSV</button></div>
+        <div id="cashflowBody">Select a project to view.</div>
+    </div></div>
+
+    <div class="pm-panel" id="panel-outstanding"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Outstanding</h3><button class="btn-secondary" onclick="exportOutstanding()">Export CSV</button></div>
+        <div id="outstandingBody">Select a project to view.</div>
+    </div></div>
+
+    <div class="pm-panel" id="panel-timeline"><div class="pm-section">
+        <div class="page-header no-print" style="margin-bottom:8px;"><h3 style="margin:0;">Financial Timeline</h3><button class="btn-secondary" onclick="exportTimeline()">Export CSV</button> <button class="btn-secondary" onclick="pmExportToPdf()">Export PDF</button></div>
+        <table><thead><tr><th>Date</th><th>JE No.</th><th>Narration</th><th>Source</th><th>Amount</th></tr></thead><tbody id="timelineBody"><tr><td colspan="5" class="empty-state">Select a project to view.</td></tr></tbody></table>
+    </div></div>
+  </div>
+</div>
+
+<script>
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fmtDate(d){return d?new Date(d).toLocaleDateString('en-IN'):'—';}
+let activeTab = 'budget';
+let lastRevenue=null, lastCost=null, lastProfit=null, lastCashflow=null, lastOutstanding=null, lastTimeline=null, lastBudget=null;
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    document.querySelectorAll('.pm-tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+
+    try{
+        const projects = await window.Api.get('/projects');
+        document.getElementById('fProject').innerHTML = '<option value="">Select project…</option>' + projects.map(p=>`<option value="${p.id}">${p.project_code} — ${p.project_name}</option>`).join('');
+    }catch(e){}
+    try{
+        const fys = await window.Api.get('/financial-years');
+        document.getElementById('fFinYear').innerHTML = '<option value="">Custom range</option>' + fys.map(f=>`<option value="${f.id}" data-start="${f.start_date}" data-end="${f.end_date}">${f.code}</option>`).join('');
+    }catch(e){}
+
+    const params = new URLSearchParams(window.location.search);
+    if(params.get('projectId')) document.getElementById('fProject').value = params.get('projectId');
+
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('fFrom').value = today.slice(0,8)+'01';
+    document.getElementById('fTo').value = today;
+});
+
+function switchTab(tabName){
+    activeTab = tabName;
+    document.querySelectorAll('.pm-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    document.querySelectorAll('.pm-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-'+tabName));
+    loadActiveTab();
+}
+function onFinYearChanged(){
+    const sel = document.getElementById('fFinYear');
+    const opt = sel.options[sel.selectedIndex];
+    if(opt && opt.dataset.start){
+        document.getElementById('fFrom').value = opt.dataset.start;
+        document.getElementById('fTo').value = opt.dataset.end;
+    }
+    loadActiveTab();
+}
+function onFiltersChanged(){ loadActiveTab(); }
+
+async function loadActiveTab(){
+    const projectId = document.getElementById('fProject').value;
+    const from = document.getElementById('fFrom').value, to = document.getElementById('fTo').value;
+    if(!projectId) return;
+    const q = '?fromDate='+from+'&toDate='+to;
+    try{
+        if(activeTab==='budget'){
+            lastBudget = await window.Api.get('/projects/'+projectId+'/reports/budget-vs-actual');
+            document.getElementById('budgetBody').innerHTML = `
+                <div class="pm-row"><span>Cost — Budgeted</span><span>₹${fmt(lastBudget.cost.budgeted)}</span></div>
+                <div class="pm-row"><span>Cost — Actual</span><span>₹${fmt(lastBudget.cost.actual)}</span></div>
+                <div class="pm-row" style="font-weight:700;"><span>Cost — Variance</span><span style="color:${lastBudget.cost.variance<0?'#c0392b':'#1a8843'}">₹${fmt(lastBudget.cost.variance)}</span></div>
+                <div class="pm-row"><span>Revenue — Budgeted</span><span>₹${fmt(lastBudget.revenue.budgeted)}</span></div>
+                <div class="pm-row"><span>Revenue — Actual</span><span>₹${fmt(lastBudget.revenue.actual)}</span></div>
+                <div class="pm-row" style="font-weight:700;"><span>Revenue — Variance</span><span style="color:${lastBudget.revenue.variance<0?'#c0392b':'#1a8843'}">₹${fmt(lastBudget.revenue.variance)}</span></div>
+            `;
+        }
+        if(activeTab==='revenue'){
+            lastRevenue = await window.Api.get('/projects/'+projectId+'/reports/revenue'+q);
+            document.getElementById('revenueBody').innerHTML = `<div class="pm-row"><span>Gross Revenue</span><span>₹${fmt(lastRevenue.grossRevenue)}</span></div><div class="pm-row"><span>Credit Notes</span><span>₹${fmt(lastRevenue.creditNotes)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net Revenue</span><span>₹${fmt(lastRevenue.netRevenue)}</span></div>`;
+        }
+        if(activeTab==='cost'){
+            lastCost = await window.Api.get('/projects/'+projectId+'/reports/cost'+q);
+            document.getElementById('costBody').innerHTML = `<div class="pm-row"><span>Gross Cost</span><span>₹${fmt(lastCost.grossCost)}</span></div><div class="pm-row"><span>Debit Notes</span><span>₹${fmt(lastCost.debitNotes)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net Cost</span><span>₹${fmt(lastCost.netCost)}</span></div>`;
+        }
+        if(activeTab==='profit'){
+            lastProfit = await window.Api.get('/projects/'+projectId+'/reports/profitability'+q);
+            document.getElementById('profitBody').innerHTML = `<div class="pm-row"><span>Net Revenue</span><span>₹${fmt(lastProfit.netRevenue)}</span></div><div class="pm-row"><span>Net Cost</span><span>₹${fmt(lastProfit.netCost)}</span></div><div class="pm-row" style="font-weight:700;"><span>Gross Profit</span><span>₹${fmt(lastProfit.grossProfit)}</span></div><div class="pm-row"><span>Manual Adjustments</span><span>₹${fmt(lastProfit.manualJournalNet)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net Profit</span><span>₹${fmt(lastProfit.netProfit)}</span></div>`;
+        }
+        if(activeTab==='cashflow'){
+            lastCashflow = await window.Api.get('/projects/'+projectId+'/reports/cashflow'+q);
+            document.getElementById('cashflowBody').innerHTML = `<div class="pm-row"><span>Cash In</span><span>₹${fmt(lastCashflow.cashIn)}</span></div><div class="pm-row"><span>Cash Out</span><span>₹${fmt(lastCashflow.cashOut)}</span></div><div class="pm-row" style="font-weight:700;"><span>Net Cash</span><span>₹${fmt(lastCashflow.netCash)}</span></div>`;
+        }
+        if(activeTab==='outstanding'){
+            lastOutstanding = await window.Api.get('/projects/'+projectId+'/reports/outstanding');
+            document.getElementById('outstandingBody').innerHTML = `<div class="pm-row"><span>Receivable</span><span>₹${fmt(lastOutstanding.receivable)}</span></div><div class="pm-row"><span>Payable</span><span>₹${fmt(lastOutstanding.payable)}</span></div>`;
+        }
+        if(activeTab==='timeline'){
+            lastTimeline = await window.Api.get('/projects/'+projectId+'/reports/timeline'+q);
+            document.getElementById('timelineBody').innerHTML = lastTimeline.length ? lastTimeline.map(r=>`<tr><td>${fmtDate(r.entry_date)}</td><td>${r.je_no}</td><td>${escapeHtml(r.narration)}</td><td><span class="badge">${r.source_type}</span></td><td>₹${fmt(r.total_amount)}</td></tr>`).join('') : '<tr><td colspan="5" class="empty-state">No transactions in this range.</td></tr>';
+        }
+    }catch(e){
+        alert('Could not load report: '+(e.message||'Unknown error'));
+    }
+}
+
+function exportBudget(){ if(!lastBudget){alert('Load the report first.');return;} pmExportToCsv('budget-vs-actual', [
+    {type:'Cost',...lastBudget.cost}, {type:'Revenue',...lastBudget.revenue}
+], [{label:'Type',value:'type'},{label:'Budgeted',value:'budgeted'},{label:'Actual',value:'actual'},{label:'Variance',value:'variance'}]); }
+function exportRevenue(){ if(!lastRevenue){alert('Load the report first.');return;} pmExportToCsv('revenue', [lastRevenue], [{label:'Gross Revenue',value:'grossRevenue'},{label:'Credit Notes',value:'creditNotes'},{label:'Net Revenue',value:'netRevenue'}]); }
+function exportCost(){ if(!lastCost){alert('Load the report first.');return;} pmExportToCsv('cost', [lastCost], [{label:'Gross Cost',value:'grossCost'},{label:'Debit Notes',value:'debitNotes'},{label:'Net Cost',value:'netCost'}]); }
+function exportProfit(){ if(!lastProfit){alert('Load the report first.');return;} pmExportToCsv('profitability', [lastProfit], [{label:'Net Revenue',value:'netRevenue'},{label:'Net Cost',value:'netCost'},{label:'Gross Profit',value:'grossProfit'},{label:'Manual Adjustments',value:'manualJournalNet'},{label:'Net Profit',value:'netProfit'}]); }
+function exportCashflow(){ if(!lastCashflow){alert('Load the report first.');return;} pmExportToCsv('cashflow', [lastCashflow], [{label:'Cash In',value:'cashIn'},{label:'Cash Out',value:'cashOut'},{label:'Net Cash',value:'netCash'}]); }
+function exportOutstanding(){ if(!lastOutstanding){alert('Load the report first.');return;} pmExportToCsv('outstanding', [lastOutstanding], [{label:'Receivable',value:'receivable'},{label:'Payable',value:'payable'}]); }
+function exportTimeline(){ if(!lastTimeline||!lastTimeline.length){alert('Load the report first.');return;} pmExportToCsv('financial-timeline', lastTimeline, [{label:'Date',value:'entry_date'},{label:'JE No.',value:'je_no'},{label:'Narration',value:'narration'},{label:'Source',value:'source_type'},{label:'Amount',value:'total_amount'}]); }
+
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/pm-export.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

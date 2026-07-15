@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chart of Accounts</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.action-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px;flex-wrap:wrap;}
+.search-box{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e6ee;border-radius:8px;padding:8px 12px;min-width:220px;}
+.search-box input{border:none;outline:none;flex:1;font-size:13px;}
+.table-wrap{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:10px 12px;border-bottom:1px solid #f0f2f6;}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:capitalize;}
+.badge.asset{background:#d4edda;color:#155724;} .badge.liability{background:#f8d7da;color:#721c24;}
+.badge.equity{background:#d1ecf1;color:#0c5460;} .badge.income{background:#fff3cd;color:#856404;}
+.badge.expense{background:#e2e3e5;color:#383d41;}
+.state-box{text-align:center;padding:40px;color:#aaa;}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="page-header"><h2>Chart of Accounts</h2></div>
+
+  <div class="action-bar">
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Add Account</button>
+    <div class="search-box">🔍<input type="text" id="searchInput" placeholder="Search code or name…" oninput="applySearch()"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>Opening Balance</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="accountsBody"><tr><td colspan="6" class="state-box">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="accountModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="modalTitle">Add Account</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field"><label>Account Code *</label><input type="text" id="fCode" placeholder="e.g. 6100"><input type="hidden" id="editId"></div>
+        <div class="field"><label>Account Name *</label><input type="text" id="fName"></div>
+      </div>
+      <div class="field"><label>Account Type *</label>
+        <select id="fType"><option value="asset">Asset</option><option value="liability">Liability</option><option value="equity">Equity</option><option value="income">Income</option><option value="expense">Expense</option></select>
+      </div>
+      <div class="field">
+        <label>Special Role</label>
+        <select id="fSpecialRole">
+          <option value="">None</option>
+          <option value="sundry_debtors">Sundry Debtors (Receivables)</option>
+          <option value="sales">Sales</option>
+          <option value="discount_allowed">Discount Allowed</option>
+          <option value="sundry_creditors">Sundry Creditors (Payables)</option>
+          <option value="purchases">Purchases</option>
+          <option value="discount_received">Discount Received</option>
+          <option value="freight">Freight / Carriage</option>
+          <option value="gst_output">GST Output (Payable)</option>
+          <option value="gst_input">GST Input (Receivable)</option>
+          <option value="tds_payable">TDS Payable</option>
+          <option value="tds_receivable">TDS Receivable</option>
+          <option value="tcs">TCS</option>
+          <option value="cash">Cash in Hand</option>
+          <option value="round_off">Round Off</option>
+          <option value="opening_balance_equity">Opening Balance Equity</option>
+          <option value="inventory_adjustment">Inventory Adjustment</option>
+          <option value="salary_payable">Salary Payable</option>
+        </select>
+        <p style="font-size:11px;color:#8a93a6;margin-top:4px;">Only needed for accounts the system posts to automatically. Each role can only be assigned to one account at a time.</p>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Opening Balance</label><input type="number" id="fOpeningBalance" value="0" step="0.01"></div>
+        <div class="field"><label>Opening Type</label><select id="fOpeningType"><option value="debit">Debit</option><option value="credit">Credit</option></select></div>
+      </div>
+      <p id="modalMsg" style="color:#c0392b;font-size:13px;"></p>
+    </div>
+    <div class="modal-footer"><button class="btn-primary" id="saveBtnLabel" onclick="saveAccount()">Create</button></div>
+  </div>
+</div>
+
+<script>
+let allAccounts = [];
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+  loadAccounts();
+});
+
+async function loadAccounts(){
+  const body = document.getElementById('accountsBody');
+  body.innerHTML = '<tr><td colspan="6" class="state-box">Loading…</td></tr>';
+  try {
+    allAccounts = await window.Api.get('/chart-of-accounts');
+    renderTable(allAccounts);
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="6" class="state-box">Could not load: '+(e.message||'')+'</td></tr>';
+  }
+}
+function fmt(n){ return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function renderTable(rows){
+  const body = document.getElementById('accountsBody');
+  if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="state-box">No accounts found.</td></tr>'; return; }
+  body.innerHTML = rows.map(r=>`<tr>
+    <td>${escapeHtml(r.account_code)}</td>
+    <td><strong>${escapeHtml(r.account_name)}</strong>${r.is_system?' <span style="color:#8a93a6;font-size:11px;">(system)</span>':''}${r.special_role?` <span class="badge" style="font-size:10px;">${r.special_role.replace(/_/g,' ')}</span>`:''}</td>
+    <td><span class="badge ${r.account_type}">${r.account_type}</span></td>
+    <td>₹${fmt(r.opening_balance)} ${r.opening_type==='credit'?'Cr':'Dr'}</td>
+    <td>${r.is_active===false?'Inactive':'Active'}</td>
+    <td>
+      <button class="btn-secondary" onclick='openEditModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'><i class="fa-solid fa-pen"></i> Edit</button>
+      ${(r.is_active!==false && !r.is_system) ? `<button class="btn-secondary" onclick="deactivateAccount(${r.id},'${r.account_code}')">Deactivate</button>` : ''}
+    </td>
+  </tr>`).join('');
+}
+
+function applySearch(){
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderTable(allAccounts.filter(r => !q || r.account_code.toLowerCase().includes(q) || r.account_name.toLowerCase().includes(q)));
+}
+
+function openAddModal(){
+  document.getElementById('editId').value='';
+  document.getElementById('modalTitle').textContent='Add Account';
+  document.getElementById('saveBtnLabel').textContent='Create';
+  document.getElementById('fCode').value=''; document.getElementById('fCode').disabled=false; document.getElementById('fName').value='';
+  document.getElementById('fType').value='asset'; document.getElementById('fOpeningBalance').value='0'; document.getElementById('fOpeningBalance').disabled=false;
+  document.getElementById('fOpeningType').value='debit'; document.getElementById('fOpeningType').disabled=false;
+  document.getElementById('fSpecialRole').value=''; document.getElementById('modalMsg').textContent='';
+  document.getElementById('accountModal').classList.add('active');
+}
+function openEditModal(r){
+  document.getElementById('editId').value=r.id;
+  document.getElementById('modalTitle').textContent='Edit Account';
+  document.getElementById('saveBtnLabel').textContent='Save';
+  document.getElementById('fCode').value=r.account_code; document.getElementById('fCode').disabled=true; // code is fixed once created
+  document.getElementById('fName').value=r.account_name;
+  document.getElementById('fType').value=r.account_type;
+  document.getElementById('fOpeningBalance').value=r.opening_balance;
+  document.getElementById('fOpeningBalance').disabled=true; // opening balance isn't editable after creation
+  document.getElementById('fOpeningType').value=r.opening_type;
+  document.getElementById('fOpeningType').disabled=true;
+  document.getElementById('fSpecialRole').value=r.special_role||'';
+  document.getElementById('modalMsg').textContent='';
+  document.getElementById('accountModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('accountModal').classList.remove('active'); }
+
+async function saveAccount(){
+  const editId = document.getElementById('editId').value;
+  try {
+    if (editId) {
+      await window.Api.patch('/chart-of-accounts/'+editId, {
+        accountName: document.getElementById('fName').value.trim(),
+        accountType: document.getElementById('fType').value,
+        specialRole: document.getElementById('fSpecialRole').value || null,
+      });
+    } else {
+      const payload = {
+        accountCode: document.getElementById('fCode').value.trim(),
+        accountName: document.getElementById('fName').value.trim(),
+        accountType: document.getElementById('fType').value,
+        openingBalance: Number(document.getElementById('fOpeningBalance').value)||0,
+        openingType: document.getElementById('fOpeningType').value,
+        specialRole: document.getElementById('fSpecialRole').value || null,
+      };
+      if (!payload.accountCode || !payload.accountName) { document.getElementById('modalMsg').textContent='Account code and name are required.'; return; }
+      await window.Api.post('/chart-of-accounts', payload);
+    }
+    closeModal();
+    loadAccounts();
+  } catch(e) {
+    document.getElementById('modalMsg').textContent = 'Failed to save: '+(e.message||'Unknown error');
+  }
+}
+
+async function deactivateAccount(id, code){
+  if (!confirm('Deactivate account "'+code+'"? It will no longer be selectable for new postings.')) return;
+  try {
+    await window.Api.post('/chart-of-accounts/'+id+'/deactivate', {});
+    loadAccounts();
+  } catch(e) {
+    alert('Could not deactivate: '+(e.message||'Unknown error'));
+  }
+}
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

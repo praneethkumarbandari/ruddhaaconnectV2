@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM — Leads</title>
+<script>(function(){try{var t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>CRM — Leads</h2>
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> New Lead</button>
+  </div>
+  <!--
+    NOTE: No backend route exists for CRM yet — this follows the same
+    direct-Supabase pattern as Inventory/Bank/Costing (crm_leads table),
+    ready to swap for a real /api/crm/* backend later without changing
+    this page's shape. A lead can optionally link to an EXISTING
+    customer or vendor record (Masters) via a simple lookup dropdown —
+    this page never creates or edits customer/vendor records itself.
+  -->
+  <div class="filter-bar">
+    <input type="text" id="searchInput" placeholder="Search by lead name or company…" oninput="applySearch()">
+    <select id="filterStatus" onchange="applySearch()">
+      <option value="">All Status</option>
+      <option value="new">New</option>
+      <option value="contacted">Contacted</option>
+      <option value="qualified">Qualified</option>
+      <option value="won">Won</option>
+      <option value="lost">Lost</option>
+    </select>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Total Leads</h4><div class="s-val" id="cntTotal">—</div></div>
+    <div class="summary-card"><h4>Open</h4><div class="s-val" id="cntOpen">—</div></div>
+    <div class="summary-card"><h4>Won</h4><div class="s-val" id="cntWon">—</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Lead Name</th><th>Company</th><th>Linked Customer</th><th>Status</th><th>Est. Value</th><th>Actions</th></tr></thead>
+      <tbody id="leadsBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="leadModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="leadModalTitle">New Lead</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="leadModalMsg"></div>
+      <div class="field"><label>Lead Name *</label><input type="text" id="fName" placeholder="Contact person's name"></div>
+      <div class="field"><label>Company</label><input type="text" id="fCompany" placeholder="Company name"></div>
+      <div class="field"><label>Phone</label><input type="tel" id="fPhone" placeholder="+91 98765 43210"></div>
+      <div class="field"><label>Email</label><input type="email" id="fEmail" placeholder="email@company.com"></div>
+      <div class="field"><label>Link to Existing Customer</label><select id="fCustomer"><option value="">— None —</option></select></div>
+      <div class="field"><label>Status</label>
+        <select id="fStatus">
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="qualified">Qualified</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+        </select>
+      </div>
+      <div class="field"><label>Estimated Value</label><input type="number" step="0.01" id="fValue" placeholder="0.00"></div>
+      <div class="field"><label>Source</label><input type="text" id="fSource" placeholder="e.g. referral, website, cold call"></div>
+      <div class="field"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveLead()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allLeads = [], customers = [], editId = null;
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth || !window.Auth.isAuthenticated()) {
+        const stored = localStorage.getItem('loggedEmployee');
+        if (!stored) { window.top.location.href = '/business-login.html'; return; }
+    }
+    const emp = window.Auth ? window.Auth.getEmployee() : JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||emp.name||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    await loadCustomerLookup();
+    await loadLeads();
+});
+
+async function loadCustomerLookup(){
+    try {
+        customers = await window.Api.get('/customers');
+        document.getElementById('fCustomer').innerHTML = '<option value="">— None —</option>' +
+            (customers||[]).map(c=>`<option value="${c.id}">${c.customer_name}</option>`).join('');
+    } catch(e) { console.warn('Could not load customer lookup:', e.message); }
+}
+function customerLabel(id){ const c = customers.find(x=>String(x.id)===String(id)); return c ? c.customer_name : '—'; }
+
+async function loadLeads(){
+    try {
+        const data = await window.Api.get('/crm/leads');
+        allLeads = data || [];
+        renderTable(allLeads);
+        updateSummary(allLeads);
+    } catch(e) {
+        document.getElementById('leadsBody').innerHTML = '<tr><td colspan="7" class="empty-state">No leads yet, or the crm_leads table hasn\'t been created in this database yet. Click "New Lead" to create the first one.</td></tr>';
+        updateSummary([]);
+    }
+}
+function updateSummary(rows){
+    document.getElementById('cntTotal').textContent = rows.length;
+    document.getElementById('cntOpen').textContent = rows.filter(r=>['new','contacted','qualified'].includes(r.status)).length;
+    document.getElementById('cntWon').textContent = rows.filter(r=>r.status==='won').length;
+}
+function renderTable(rows){
+    const tbody = document.getElementById('leadsBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No leads found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(r.lead_name)||'—'}</td>
+        <td>${escapeHtml(r.company)||'—'}</td>
+        <td>${r.customer_id ? customerLabel(r.customer_id) : '—'}</td>
+        <td><span class="badge ${r.status==='won'?'active':(r.status==='lost'?'inactive':'')}">${r.status||'—'}</span></td>
+        <td>${r.estimated_value!=null?Number(r.estimated_value).toFixed(2):'—'}</td>
+        <td><button class="action-btn" onclick='editRow(${JSON.stringify(r).replace(/'/g,"&#39;")})'><i class="fa-solid fa-pen"></i> </button></td>
+    </tr>`).join('');
+}
+function applySearch(){
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const status = document.getElementById('filterStatus').value;
+    let rows = allLeads;
+    if(q) rows = rows.filter(r => (r.lead_name||'').toLowerCase().includes(q) || (r.company||'').toLowerCase().includes(q));
+    if(status) rows = rows.filter(r => r.status===status);
+    renderTable(rows);
+}
+function openAddModal(){
+    editId = null;
+    document.getElementById('leadModalTitle').textContent = 'New Lead';
+    ['fName','fCompany','fPhone','fEmail','fValue','fSource','fNotes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fCustomer').value = '';
+    document.getElementById('fStatus').value = 'new';
+    document.getElementById('leadModalMsg').textContent = '';
+    document.getElementById('leadModal').classList.add('active');
+}
+function editRow(r){
+    editId = r.id;
+    document.getElementById('leadModalTitle').textContent = 'Edit Lead';
+    document.getElementById('fName').value = r.lead_name||'';
+    document.getElementById('fCompany').value = r.company||'';
+    document.getElementById('fPhone').value = r.phone||'';
+    document.getElementById('fEmail').value = r.email||'';
+    document.getElementById('fCustomer').value = r.customer_id||'';
+    document.getElementById('fStatus').value = r.status||'new';
+    document.getElementById('fValue').value = r.estimated_value||'';
+    document.getElementById('fSource').value = r.source||'';
+    document.getElementById('fNotes').value = r.notes||'';
+    document.getElementById('leadModalMsg').textContent = '';
+    document.getElementById('leadModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('leadModal').classList.remove('active'); }
+async function saveLead(){
+    const leadName = document.getElementById('fName').value.trim();
+    const payload = {
+        leadName: leadName,
+        company: document.getElementById('fCompany').value.trim() || null,
+        phone: document.getElementById('fPhone').value.trim() || null,
+        email: document.getElementById('fEmail').value.trim() || null,
+        customerId: document.getElementById('fCustomer').value || null,
+        status: document.getElementById('fStatus').value,
+        estimatedValue: document.getElementById('fValue').value ? Number(document.getElementById('fValue').value) : null,
+        source: document.getElementById('fSource').value.trim() || null,
+        notes: document.getElementById('fNotes').value.trim() || null,
+    };
+    if(!payload.leadName){
+        document.getElementById('leadModalMsg').textContent = 'Lead name is required.';
+        return;
+    }
+    try {
+        if(editId){ await window.Api.patch('/crm/leads/' + editId, payload); }
+        else { await window.Api.post('/crm/leads', payload); }
+        if(window.Audit) window.Audit.log('crm_leads', editId||'new', editId?'UPDATE':'CREATE', null, {lead_name: payload.leadName});
+        closeModal();
+        loadLeads();
+    } catch(e) {
+        document.getElementById('leadModalMsg').textContent = 'Could not save: '+(e.message||'Unknown error.')+(e.message||'the crm_leads table may not exist yet in this database.');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){ if(window.Auth) window.Auth.logout(); else { localStorage.removeItem('loggedEmployee'); window.top.location.href='/business-login.html'; } }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

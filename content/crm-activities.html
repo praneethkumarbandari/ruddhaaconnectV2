@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM — Activities</title>
+<script>(function(){try{var t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>CRM — Activities</h2>
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Log Activity</button>
+  </div>
+  <!--
+    NOTE: No backend route exists for CRM yet — this follows the same
+    direct-Supabase pattern as Leads/Follow-ups (crm_activities table).
+    An activity is a record of something that already happened (a call
+    made, an email sent, a meeting held) against an existing lead —
+    distinct from Follow-ups, which are scheduled future actions.
+  -->
+  <div class="filter-bar">
+    <select id="filterLead"><option value="">All Leads</option></select>
+    <select id="filterType" onchange="applyFilter()">
+      <option value="">All Types</option>
+      <option value="call">Call</option>
+      <option value="email">Email</option>
+      <option value="meeting">Meeting</option>
+      <option value="note">Note</option>
+      <option value="other">Other</option>
+    </select>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Total Activities</h4><div class="s-val" id="cntTotal">—</div></div>
+    <div class="summary-card"><h4>This Week</h4><div class="s-val" id="cntWeek">—</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Lead</th><th>Date</th><th>Type</th><th>Summary</th><th>Actions</th></tr></thead>
+      <tbody id="activitiesBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="activityModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="activityModalTitle">Log Activity</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="activityModalMsg"></div>
+      <div class="field"><label>Lead *</label><select id="fLead"><option value="">Select lead…</option></select></div>
+      <div class="field"><label>Date *</label><input type="date" id="fDate"></div>
+      <div class="field"><label>Type</label>
+        <select id="fType"><option value="call">Call</option><option value="email">Email</option><option value="meeting">Meeting</option><option value="note">Note</option><option value="other">Other</option></select>
+      </div>
+      <div class="field"><label>Summary *</label><textarea id="fSummary" placeholder="What happened"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveActivity()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allActivities = [], leads = [], editId = null;
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth || !window.Auth.isAuthenticated()) {
+        const stored = localStorage.getItem('loggedEmployee');
+        if (!stored) { window.top.location.href = '/business-login.html'; return; }
+    }
+    const emp = window.Auth ? window.Auth.getEmployee() : JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||emp.name||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    await loadLeadLookup();
+    await loadActivities();
+});
+
+async function loadLeadLookup(){
+    try {
+        const leads_data = await window.Api.get('/crm/leads');
+        leads = leads_data || [];
+        const opts = leads.map(l=>`<option value="${l.id}">${l.lead_name}${l.company?' — '+l.company:''}</option>`).join('');
+        document.getElementById('fLead').innerHTML = '<option value="">Select lead…</option>' + opts;
+        document.getElementById('filterLead').innerHTML = '<option value="">All Leads</option>' + opts;
+        document.getElementById('filterLead').addEventListener('change', applyFilter);
+    } catch(e) { console.warn('Could not load leads lookup:', e.message); }
+}
+function leadLabel(id){ const l = leads.find(x=>String(x.id)===String(id)); return l ? escapeHtml(l.lead_name) : ('#'+id); }
+
+async function loadActivities(){
+    try {
+        const data = await window.Api.get('/crm/activities');
+        allActivities = data || [];
+        renderTable(allActivities);
+        updateSummary(allActivities);
+    } catch(e) {
+        document.getElementById('activitiesBody').innerHTML = '<tr><td colspan="6" class="empty-state">No activities logged yet, or the crm_activities table hasn\'t been created in this database yet.</td></tr>';
+        updateSummary([]);
+    }
+}
+function updateSummary(rows){
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+    document.getElementById('cntTotal').textContent = rows.length;
+    document.getElementById('cntWeek').textContent = rows.filter(r=>r.activity_date && new Date(r.activity_date) >= weekAgo).length;
+}
+function renderTable(rows){
+    const tbody = document.getElementById('activitiesBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No activities found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td>${r.lead_id ? leadLabel(r.lead_id) : '—'}</td>
+        <td>${r.activity_date ? String(r.activity_date).split('T')[0] : '—'}</td>
+        <td>${r.activity_type||'—'}</td>
+        <td>${escapeHtml(r.summary)||'—'}</td>
+        <td><button class="action-btn" onclick='editRow(${JSON.stringify(r).replace(/'/g,"&#39;")})'><i class="fa-solid fa-pen"></i> </button></td>
+    </tr>`).join('');
+}
+function applyFilter(){
+    const leadId = document.getElementById('filterLead').value;
+    const type = document.getElementById('filterType').value;
+    let rows = allActivities;
+    if(leadId) rows = rows.filter(r=>String(r.lead_id)===leadId);
+    if(type) rows = rows.filter(r=>r.activity_type===type);
+    renderTable(rows);
+}
+function openAddModal(){
+    editId = null;
+    document.getElementById('activityModalTitle').textContent = 'Log Activity';
+    document.getElementById('fLead').value = '';
+    document.getElementById('fDate').value = new Date().toISOString().slice(0,10);
+    document.getElementById('fType').value = 'call';
+    document.getElementById('fSummary').value = '';
+    document.getElementById('activityModalMsg').textContent = '';
+    document.getElementById('activityModal').classList.add('active');
+}
+function editRow(r){
+    editId = r.id;
+    document.getElementById('activityModalTitle').textContent = 'Edit Activity';
+    document.getElementById('fLead').value = r.lead_id||'';
+    document.getElementById('fDate').value = r.activity_date ? String(r.activity_date).split('T')[0] : '';
+    document.getElementById('fType').value = r.activity_type||'call';
+    document.getElementById('fSummary').value = r.summary||'';
+    document.getElementById('activityModalMsg').textContent = '';
+    document.getElementById('activityModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('activityModal').classList.remove('active'); }
+async function saveActivity(){
+    const payload = {
+        leadId: document.getElementById('fLead').value || null,
+        activityDate: document.getElementById('fDate').value,
+        activityType: document.getElementById('fType').value,
+        summary: document.getElementById('fSummary').value.trim(),
+    };
+    if(!payload.leadId || !payload.activityDate || !payload.summary){
+        document.getElementById('activityModalMsg').textContent = 'Lead, date, and summary are required.';
+        return;
+    }
+    try {
+        if(editId){ await window.Api.patch('/crm/activities/' + editId, payload); }
+        else { await window.Api.post('/crm/activities', payload); }
+        if(window.Audit) window.Audit.log('crm_activities', editId||'new', editId?'UPDATE':'CREATE', null, {activity_date: payload.activityDate});
+        closeModal();
+        loadActivities();
+    } catch(e) {
+        document.getElementById('activityModalMsg').textContent = 'Could not save: '+(e.message||'Unknown error.')+(e.message||'the crm_activities table may not exist yet in this database.');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){ if(window.Auth) window.Auth.logout(); else { localStorage.removeItem('loggedEmployee'); window.top.location.href='/business-login.html'; } }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

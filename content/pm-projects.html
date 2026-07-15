@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projects</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Projects</h2>
+        <button class="btn-primary" onclick="openCreateModal()">＋ New Project</button>
+    </div>
+    <!--
+      NOTE: no "Project Manager" field exists on the projects table
+      itself — the closest real concept is a project_members row with
+      role='manager' (see src/lib/project-members.ts). This list shows
+      that instead of a field that doesn't exist in the schema.
+    -->
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Search by name or code…" oninput="applyFilters()">
+        <select id="fStatus" onchange="applyFilters()">
+            <option value="">All Statuses</option>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="on_hold">On Hold</option>
+            <option value="closing">Closing</option>
+            <option value="closed">Closed</option>
+        </select>
+        <select id="fSort" onchange="applyFilters()">
+            <option value="created_desc">Newest First</option>
+            <option value="created_asc">Oldest First</option>
+            <option value="name_asc">Name A–Z</option>
+        </select>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Customer</th><th>Category</th><th>Status</th><th>Start Date</th><th>Actions</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header"><h3>New Project</h3><button class="modal-header-close" onclick="document.getElementById('createModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="modalMsg"></div>
+      <div class="field-row">
+        <div class="field"><label>Project Code *</label><input type="text" id="fCode" placeholder="e.g. PRJ-2026-001"></div>
+        <div class="field"><label>Project Name *</label><input type="text" id="fName" placeholder="e.g. Riverside Villa Construction"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Category</label><select id="fCategory"><option value="">None</option></select></div>
+        <div class="field"><label>Customer</label><select id="fCustomer"><option value="">None</option></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Start Date</label><input type="date" id="fStartDate"></div>
+        <div class="field"><label>Target End Date</label><input type="date" id="fTargetEndDate"></div>
+      </div>
+      <div class="field">
+        <label>Project Template <span style="font-weight:400;text-transform:none;color:#8a93a6;">(optional — only if this project needs a structured hierarchy like Towers/Floors/Units or Rooms)</span></label>
+        <select id="fTemplate"><option value="">None</option></select>
+      </div>
+      <!-- Status is not settable at creation — every project starts 'draft' by backend rule (see projects.ts's ALLOWED_TRANSITIONS) and moves forward from the Workspace. -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="saveProject()">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allProjects = [];
+function fmtDate(d){return d?new Date(d).toLocaleDateString('en-IN'):'—';}
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    await loadProjects();
+    // FIX: dashboard's "+ New Project" button used to be a literal
+    // copy-paste of "View Project List" — identical onclick, just a
+    // different label, so it never actually opened the create form.
+    // This param gives it real, distinct behavior instead.
+    if (new URLSearchParams(window.location.search).get('action') === 'new') {
+        openCreateModal();
+    }
+});
+
+async function loadProjects(){
+    try{
+        allProjects = await window.Api.get('/projects');
+        applyFilters();
+    }catch(e){
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" class="empty-state">Could not load projects: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+
+function applyFilters(){
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const status = document.getElementById('fStatus').value;
+    const sort = document.getElementById('fSort').value;
+    let rows = allProjects.filter(p =>
+        (!q || p.project_name.toLowerCase().includes(q) || p.project_code.toLowerCase().includes(q)) &&
+        (!status || p.status === status)
+    );
+    if(sort==='created_desc') rows.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    if(sort==='created_asc') rows.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    if(sort==='name_asc') rows.sort((a,b)=>a.project_name.localeCompare(b.project_name));
+    renderTable(rows);
+}
+
+function renderTable(rows){
+    const tbody = document.getElementById('tableBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No projects found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map(p => `<tr>
+        <td>${p.project_code}</td>
+        <td><strong>${p.project_name}</strong></td>
+        <td>${p.customer_name||'—'}</td>
+        <td>${p.category_name||'—'}</td>
+        <td><span class="badge ${p.status}">${p.status.replace('_',' ')}</span></td>
+        <td>${fmtDate(p.start_date)}</td>
+        <td><button class="action-btn" onclick="window.parent.location.href='pm-project-workspace.html?id=${p.id}'">Open →</button></td>
+    </tr>`).join('');
+}
+
+async function openCreateModal(){
+    document.getElementById('fCode').value='';
+    document.getElementById('fName').value='';
+    document.getElementById('fStartDate').value='';
+    document.getElementById('fTargetEndDate').value='';
+    document.getElementById('modalMsg').textContent='';
+    try{
+        const categories = await window.Api.get('/project-categories').catch(()=>[]);
+        document.getElementById('fCategory').innerHTML = '<option value="">None</option>' + (categories||[]).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    }catch(e){}
+    try{
+        const customers = await window.Api.get('/customers');
+        document.getElementById('fCustomer').innerHTML = '<option value="">None</option>' + customers.filter(c=>c.is_active!==false).map(c=>`<option value="${c.id}">${c.customer_name}</option>`).join('');
+    }catch(e){}
+    try{
+        const templates = await window.Api.get('/project-templates');
+        document.getElementById('fTemplate').innerHTML = '<option value="">None</option>' +
+            (templates||[]).map(t=>`<option value="${t.id}">${escapeHtml(t.template_name)}${t.is_standard?'':' (custom)'}</option>`).join('');
+    }catch(e){}
+    document.getElementById('createModal').classList.add('active');
+}
+
+async function saveProject(){
+    const projectCode = document.getElementById('fCode').value.trim();
+    const projectName = document.getElementById('fName').value.trim();
+    const categoryId = document.getElementById('fCategory').value;
+    const customerId = document.getElementById('fCustomer').value;
+    const templateId = document.getElementById('fTemplate').value;
+    const startDate = document.getElementById('fStartDate').value;
+    const targetEndDate = document.getElementById('fTargetEndDate').value;
+    const msg = document.getElementById('modalMsg');
+    if(!projectCode || !projectName){ msg.textContent = 'Project code and name are required.'; return; }
+    try{
+        await window.Api.post('/projects', {
+            projectCode, projectName,
+            categoryId: categoryId || undefined,
+            customerId: customerId || undefined,
+            templateId: templateId || undefined,
+            startDate: startDate || undefined,
+            targetEndDate: targetEndDate || undefined,
+        });
+        document.getElementById('createModal').classList.remove('active');
+        loadProjects();
+    }catch(e){
+        msg.textContent = 'Could not create project: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

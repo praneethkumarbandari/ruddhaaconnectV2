@@ -1,0 +1,578 @@
+/* ========================================
+   RUDDHAACONNECT - LAYOUT & STRUCTURE
+   Header, Sidebar, Main, Footer
+   ======================================== */
+
+@import url('variables.css');
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding-top: var(--header-height);
+}
+
+/* ══ HEADER ══ */
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    background: var(--header-bg);
+    backdrop-filter: blur(var(--card-blur));
+    -webkit-backdrop-filter: blur(var(--card-blur));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px 0 16px;
+    z-index: 200;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: background 0.15s;
+}
+
+.sidebar-toggle:hover {
+    background: var(--secondary-color);
+}
+
+.sidebar-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: #444;
+    border-radius: 2px;
+    transition: all 0.25s;
+}
+
+#companyLogo {
+    height: 36px;
+    width: auto;
+    display: none;
+}
+
+#companyName {
+    font-size: 18px;
+    font-weight: 800;
+    color: #111;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.employee-info {
+    text-align: right;
+}
+
+.employee-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111;
+}
+
+.employee-meta {
+    font-size: 11px;
+    color: #444;
+    font-weight: 600;
+}
+
+.logout-btn {
+    padding: 7px 16px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.logout-btn:hover {
+    opacity: 0.9;
+}
+
+/* ══ MODULE SWITCHER / QUICK-NEW / NOTIFICATIONS / PROFILE ══ */
+.header-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
+/* ══ UNIVERSAL SEARCH (Header Redesign) ══
+   Center of the header, per spec — searches Customers, Vendors,
+   Ledgers, Chart of Accounts, Bank Accounts, Bank Transactions,
+   Invoices, Journal Entries, Inventory, Projects, Employees, Reports,
+   Settings (see src/routes/search.ts + js/shell.js wireUniversalSearch). */
+.universal-search {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+}
+.universal-search .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8a93a6;
+    font-size: 13px;
+    pointer-events: none;
+}
+.universal-search input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px 8px 32px;
+    border: 1.5px solid var(--border-color, #e0e0e0);
+    border-radius: 8px;
+    font-size: 13px;
+    background: rgba(255,255,255,0.6);
+}
+.universal-search input:focus {
+    outline: none;
+    border-color: var(--primary-color, #4a6cf7);
+    background: #fff;
+}
+.universal-search-results {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    max-height: 420px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    z-index: 300;
+}
+.universal-search-results.open { display: block; }
+.us-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    text-decoration: none;
+    color: #222;
+    font-size: 13px;
+    border-bottom: 1px solid #f2f3f6;
+}
+.us-result:last-child { border-bottom: none; }
+.us-result:hover { background: rgba(74,108,247,0.06); }
+.us-type {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #8a93a6;
+    background: #f4f5f8;
+    padding: 2px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+.us-label { font-weight: 600; flex: 1; }
+.us-sublabel { color: #8a93a6; font-size: 12px; }
+
+.module-switcher-btn, .quick-new-btn, .notif-bell-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    background: transparent;
+    border: 1.5px solid var(--border-color, #e0e0e0);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-color, #111);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.module-switcher-btn:hover, .quick-new-btn:hover, .notif-bell-btn:hover {
+    background: var(--secondary-color);
+}
+
+.notif-bell-btn { position: relative; padding: 8px 10px; }
+.notif-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--danger-color, #e53935);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.module-switcher-list, .quick-new-list, .notif-list {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    background: var(--card-color, #fff);
+    backdrop-filter: blur(var(--card-blur, 16px));
+    -webkit-backdrop-filter: blur(var(--card-blur, 16px));
+    border: 1px solid var(--card-border, #eee);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    min-width: 220px;
+    max-width: 320px;
+    z-index: 400;
+    overflow: hidden;
+    flex-direction: column;
+}
+.module-switcher-list.open, .quick-new-list.open, .notif-list.open { display: flex; }
+.module-switcher-list a, .quick-new-list a, .notif-list a {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-color, #111);
+    text-decoration: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+.module-switcher-list a:hover, .quick-new-list a:hover, .notif-list a:hover {
+    background: var(--secondary-color);
+}
+.dropdown-empty { padding: 14px 16px; font-size: 12px; color: #999; text-align: center; }
+
+.quick-new-btn { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+.quick-new-btn:hover { opacity: 0.9; background: var(--primary-color); }
+
+.header-right { position: relative; }
+.header-center { position: relative; }
+
+.profile-menu {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: default;
+}
+.profile-menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 20px;
+    color: var(--text-color, #444);
+    cursor: pointer;
+    padding: 4px;
+}
+.profile-menu.profile-menu-collapsed .employee-info,
+.profile-menu.profile-menu-collapsed .logout-btn,
+.profile-menu.profile-menu-collapsed .profile-menu-view-link {
+    display: none;
+}
+.profile-menu.profile-menu-collapsed.open {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--card-color, #fff);
+    backdrop-filter: blur(var(--card-blur, 16px));
+    -webkit-backdrop-filter: blur(var(--card-blur, 16px));
+    border: 1px solid var(--card-border, #eee);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    padding: 12px;
+    min-width: 200px;
+    z-index: 400;
+}
+.profile-menu.profile-menu-collapsed.open .employee-info,
+.profile-menu.profile-menu-collapsed.open .logout-btn,
+.profile-menu.profile-menu-collapsed.open .profile-menu-view-link {
+    display: block;
+}
+.profile-menu.profile-menu-collapsed.open .employee-info { text-align: left; margin-bottom: 10px; }
+.profile-menu-view-link {
+    padding: 8px 0;
+    font-size: 13px;
+    color: var(--text-color, #111);
+    text-decoration: none;
+    display: block;
+    border-top: 1px solid var(--card-border, #eee);
+    border-bottom: 1px solid var(--card-border, #eee);
+    margin: 6px 0;
+}
+.profile-menu-view-link:hover { color: var(--primary-color); }
+
+@media (max-width: 900px) {
+    .header-center { display: none; }
+}
+
+/* ══ SIDEBAR ══ */
+.sidebar {
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    background: var(--sidebar-color);
+    overflow-y: auto;
+    z-index: 100;
+    transition: transform 0.3s;
+}
+
+.sidebar.mobile-open {
+    transform: translateX(0);
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+}
+
+.sidebar-overlay.active {
+    display: block;
+}
+
+.sidebar-group {
+    padding: 10px 0;
+}
+
+.sidebar-group-title {
+    padding: 10px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sidebar-item {
+    padding: 10px 16px;
+    color: #ccc;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sidebar-item:hover {
+    background: rgba(31, 107, 255, 0.1);
+    color: #fff;
+}
+
+.sidebar-item.active {
+    background: rgba(31, 107, 255, 0.2);
+    color: var(--primary-color);
+    border-left: 3px solid var(--primary-color);
+    padding-left: 13px;
+}
+
+.sidebar-toggle-btn {
+    background: none;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: auto;
+    padding: 4px;
+}
+
+.sidebar-toggle-btn:hover {
+    color: #fff;
+}
+
+/* ══ MAIN CONTENT ══ */
+/* FIX: this margin-left must only apply to the OUTER shell's content
+   area (id="mainArea", sitting directly beside the real sidebar).
+   Every content page loaded inside the iframe also links this same
+   stylesheet and also uses class="main" (as id="mainContent") for its
+   own wrapper — with the old unscoped ".main" rule, EVERY single
+   content page picked up this same 240px margin a second time, even
+   though the iframe itself is already correctly positioned by the
+   outer page. The result was every page's real content pushed an
+   extra 240px to the right, on top of its already-correct position —
+   the "large gap from the left" on every single page. Scoping this to
+   #mainArea only fixes it everywhere at once, in this one file. */
+#mainArea.main {
+    margin-left: var(--sidebar-width);
+    flex: 1;
+    padding: 24px;
+    background: var(--background-color);
+    transition: margin-left 0.3s;
+}
+
+#mainArea.main.sidebar-collapsed {
+    margin-left: 0;
+}
+
+@media (max-width: 900px) {
+    .sidebar {
+        position: fixed;
+        transform: translateX(-100%);
+        width: var(--sidebar-width);
+    }
+    
+    .main {
+        margin-left: 0;
+    }
+}
+
+/* ══ PAGE STRUCTURE ══ */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+}
+
+.page-header h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #111;
+}
+
+.page-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ══ RIBBON ══ */
+.ribbon {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.ribbon-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.ribbon-item {
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ribbon-item:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.ribbon-item.active {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+/* ══ FOOTER ══ */
+footer {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+    font-size: 12px;
+    border-top: 1px solid #e0e0e0;
+    margin-top: auto;
+}
+
+/* ══ SHELL: collapsed sidebar ══ */
+.sidebar.collapsed {
+    transform: translateX(-100%);
+}
+#mainArea.main.expanded {
+    margin-left: 0;
+}
+
+/* Lucky's CSS lives in css/lucky/lucky.css and is loaded dynamically
+   only when window.LUCKY_ENABLED is true — see js/shell.js. It is
+   deliberately not present in this always-loaded stylesheet. */
+
+/* ══ NAV ARROW ROTATION ══ */
+.nav-group-toggle.open .nav-arrow { transform: rotate(180deg); }
+.nav-arrow { display: inline-block; transition: transform 0.2s; margin-left: auto; }
+
+/* ══ NAV ITEMS (sidebar) ══ */
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    color: var(--sidebar-text);
+    opacity: 0.85;
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.15s;
+    cursor: pointer;
+}
+.nav-item:hover {
+    background: rgba(31, 107, 255, 0.1);
+    opacity: 1;
+}
+.nav-item.active {
+    background: rgba(31, 107, 255, 0.2);
+    color: var(--primary-color);
+    border-left: 3px solid var(--primary-color);
+    padding-left: 13px;
+}
+.nav-group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    color: #ccc;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+.nav-group-toggle:hover {
+    background: rgba(31,107,255,0.08);
+    color: #fff;
+}
+.nav-group-toggle.open {
+    color: #fff;
+}
+.nav-sub {
+    display: none;
+    background: rgba(0,0,0,0.15);
+}
+.nav-sub.open { display: block; }
+.nav-sub .nav-item {
+    padding-left: 36px;
+    font-size: 12.5px;
+}
+.nav-icon { font-size: 14px; flex-shrink: 0; width: 18px; text-align: center; opacity: 0.9; }
+.nav-label { flex: 1; }

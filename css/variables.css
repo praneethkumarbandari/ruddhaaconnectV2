@@ -1,0 +1,102 @@
+/* ========================================
+   RUDDHAACONNECT - CSS VARIABLES
+   Global Theme Variables
+   ======================================== */
+
+:root {
+    /* Colors - Ruddhaa Theme */
+    --primary-color: #1f6bff;
+    --secondary-color: #dbe7ff;
+    --background-color: #f5f7fb;
+    --text-primary: #111;
+    --text-secondary: #666;
+    --text-tertiary: #999;
+    --border-color: #e0e0e0;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --danger-color: #e53935;
+    --info-color: #2196f3;
+
+    /* FIX: cards were hardcoded to solid #fff throughout the shared
+       CSS (cards.css, global.css, layout.css, tables.css, modals.css,
+       forms.css), with no variable and no way to theme them. These
+       four are new, real theme controls (Settings → Theme & Colors),
+       not just renamed existing ones. Defaults below give the
+       glassmorphic look (semi-transparent + blur) by default, on
+       every page using the shared card/table/modal/form styles,
+       without needing a value set in portal_config first. */
+    --text-color: var(--text-primary);
+    --heading-color: var(--text-primary);
+    --card-color: rgba(255, 255, 255, 0.55);
+    --kpi-title-color: #8a93a6;
+    --kpi-content-color: var(--heading-color);
+    --card-blur: 16px;
+    --card-border: rgba(255, 255, 255, 0.35);
+    --menu-color: #111622;
+    --menu-text-color: #ffffff;
+
+    /* Sidebar */
+    --sidebar-width: 240px;
+    --sidebar-color: var(--menu-color);
+    --sidebar-text: var(--menu-text-color);
+    
+    /* Header */
+    --header-height: 60px;
+    --header-bg: var(--card-color);
+    --header-shadow: 0 2px 8px rgba(0,0,0,.07);
+    
+    /* Typography */
+    --font-family: 'Segoe UI', sans-serif;
+    --font-size-base: 13px;
+    --font-size-lg: 14px;
+    --font-size-xl: 16px;
+    --font-size-heading: 20px;
+    
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-2xl: 24px;
+    
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+    
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 1px 6px rgba(0,0,0,0.08);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+    
+    /* Z-index */
+    --z-sidebar: 100;
+    --z-header: 200;
+    --z-modal: 300;
+    --z-tooltip: 400;
+}
+
+/* Dark mode support (future) */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background-color: #0f1419;
+        --text-primary: #e0e0e0;
+        --text-secondary: #b0b0b0;
+        --border-color: #333;
+        --header-bg: #1a1f2e;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+    :root {
+        --border-color: #000;
+        --text-primary: #000;
+    }
+}

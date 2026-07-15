@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{margin-bottom:18px;}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.report-card{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:18px;text-decoration:none;color:#1a2233;display:block;transition:transform .15s;}
+.report-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.12);}
+.report-card .r-icon{font-size:24px;margin-bottom:8px;}
+.report-card .r-name{font-weight:700;font-size:14px;}
+.report-card .r-desc{font-size:12px;color:#8a93a6;margin-top:4px;}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="page-header"><h2>Reports</h2><p style="color:#8a93a6;font-size:13px;">Every report already built in Ruddhaa, in one place.</p></div>
+
+  <div class="report-grid">
+    <a class="report-card" href="/general-ledger.html" target="_top"><div class="r-icon">📖</div><div class="r-name">General Ledger</div><div class="r-desc">Account-wise transaction history</div></a>
+    <a class="report-card" href="/trial-balance.html" target="_top"><div class="r-icon">⚖️</div><div class="r-name">Trial Balance</div><div class="r-desc">Debit/credit balance per account</div></a>
+    <a class="report-card" href="/profit-loss.html" target="_top"><div class="r-icon">📈</div><div class="r-name">Profit &amp; Loss</div><div class="r-desc">Income vs expense for a period</div></a>
+    <a class="report-card" href="/balance-sheet.html" target="_top"><div class="r-icon">🏛️</div><div class="r-name">Balance Sheet</div><div class="r-desc">Assets, liabilities &amp; equity as of a date</div></a>
+    <a class="report-card" href="/daybook.html" target="_top"><div class="r-icon">📔</div><div class="r-name">Day Book</div><div class="r-desc">Every transaction for a chosen day</div></a>
+    <a class="report-card" href="/customer-ledger.html" target="_top"><div class="r-icon">👤</div><div class="r-name">Customer Ledger</div><div class="r-desc">One customer's full transaction history</div></a>
+    <a class="report-card" href="/vendor-ledger.html" target="_top"><div class="r-icon">🏭</div><div class="r-name">Vendor Ledger</div><div class="r-desc">One vendor's full transaction history</div></a>
+    <a class="report-card" href="/cash-book.html" target="_top"><div class="r-icon">💵</div><div class="r-name">Cash Book</div><div class="r-desc">All cash account movement</div></a>
+    <a class="report-card" href="/bank-book.html" target="_top"><div class="r-icon">🏦</div><div class="r-name">Bank Book</div><div class="r-desc">All bank account movement</div></a>
+    <a class="report-card" href="/gst-reports.html" target="_top"><div class="r-icon">🏛️</div><div class="r-name">GST Reports</div><div class="r-desc">Output/input tax summary</div></a>
+    <a class="report-card" href="/inventory-ledger.html" target="_top"><div class="r-icon">📋</div><div class="r-name">Inventory Ledger</div><div class="r-desc">Every stock movement, item-wise</div></a>
+    <a class="report-card" href="/outstanding.html" target="_top"><div class="r-icon">📋</div><div class="r-name">Outstanding</div><div class="r-desc">What customers owe, what's owed to vendors</div></a>
+  </div>
+</div>
+
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  const sessionData = localStorage.getItem('loggedEmployee');
+  if (!sessionData) { window.top.location.href = '/business-login.html'; }
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/escape-html.js"></script>
+</body>
+</html>

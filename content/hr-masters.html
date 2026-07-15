@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR Masters</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab-btn { padding: 8px 16px; border: 1px solid #dbe1ea; border-radius: 6px; background: #fff; cursor: pointer; }
+  .tab-btn.active { background: var(--primary-color, #4a6cf7); color: #fff; border-color: transparent; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .inactive-row { opacity: 0.5; }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>HR Masters</h2>
+  </div>
+  <!--
+    NEW PAGE (was genuinely missing): departments, designations,
+    branches, employment types, and leave types all had full backend
+    CRUD already (see src/routes/hr/departments.ts, designations.ts,
+    branches.ts, employment-types.ts, leave-types.ts) — create, edit,
+    deactivate, audit trail, all of it. But no page anywhere ever
+    called those endpoints to actually create anything; the pages that
+    read them (content/employees.html, content/leave.html) only ever
+    populated dropdowns from whatever already existed — which was
+    nothing, on a fresh install. That's why those dropdowns showed no
+    options: there was no place in the whole app to create a
+    department, designation, branch, employment type, or leave type.
+    This page is that place.
+  -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('dept')" id="tabBtn-dept">Departments</button>
+    <button class="tab-btn" onclick="switchTab('desig')" id="tabBtn-desig">Designations</button>
+    <button class="tab-btn" onclick="switchTab('branch')" id="tabBtn-branch">Branches</button>
+    <button class="tab-btn" onclick="switchTab('empType')" id="tabBtn-empType">Employment Types</button>
+    <button class="tab-btn" onclick="switchTab('leaveType')" id="tabBtn-leaveType">Leave Types</button>
+  </div>
+
+  <div class="tab-panel active" id="panel-dept">
+    <div class="page-header"><div></div><button class="btn-primary" onclick="openDeptModal()"><i class="fa-solid fa-plus"></i> Add Department</button></div>
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Name</th><th>Parent Department</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="deptBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="panel-desig">
+    <div class="page-header"><div></div><button class="btn-primary" onclick="openDesigModal()"><i class="fa-solid fa-plus"></i> Add Designation</button></div>
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="desigBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="panel-branch">
+    <div class="page-header"><div></div><button class="btn-primary" onclick="openBranchModal()"><i class="fa-solid fa-plus"></i> Add Branch</button></div>
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Name</th><th>City</th><th>State</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="branchBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="panel-empType">
+    <div class="page-header"><div></div><button class="btn-primary" onclick="openEmpTypeModal()"><i class="fa-solid fa-plus"></i> Add Employment Type</button></div>
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="empTypeBody"><tr><td colspan="4" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" id="panel-leaveType">
+    <div class="page-header"><div></div><button class="btn-primary" onclick="openLeaveTypeModal()"><i class="fa-solid fa-plus"></i> Add Leave Type</button></div>
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Name</th><th>Accrual</th><th>Annual Days</th><th>Carry Forward</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="leaveTypeBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Department modal -->
+<div class="modal" id="deptModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="deptModalTitle">Add Department</h3><button class="modal-close" onclick="closeModal('deptModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Department Code *</label><input type="text" id="deptCode"></div>
+      <div class="field"><label>Department Name *</label><input type="text" id="deptName"></div>
+      <div class="field"><label>Parent Department</label><select id="deptParent"><option value="">None</option></select></div>
+      <div class="err-msg" id="deptErr"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('deptModal')">Cancel</button><button class="btn-primary" onclick="saveDept()">Save</button></div>
+  </div>
+</div>
+
+<!-- Designation modal -->
+<div class="modal" id="desigModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="desigModalTitle">Add Designation</h3><button class="modal-close" onclick="closeModal('desigModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Designation Code *</label><input type="text" id="desigCode"></div>
+      <div class="field"><label>Designation Name *</label><input type="text" id="desigName"></div>
+      <div class="field"><label>Department</label><select id="desigDept"><option value="">None</option></select></div>
+      <div class="err-msg" id="desigErr"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('desigModal')">Cancel</button><button class="btn-primary" onclick="saveDesig()">Save</button></div>
+  </div>
+</div>
+
+<!-- Branch modal -->
+<div class="modal" id="branchModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="branchModalTitle">Add Branch</h3><button class="modal-close" onclick="closeModal('branchModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Branch Code *</label><input type="text" id="branchCode"></div>
+      <div class="field"><label>Branch Name *</label><input type="text" id="branchName"></div>
+      <div class="field"><label>Address</label><textarea id="branchAddress" rows="2"></textarea></div>
+      <div class="field"><label>City</label><input type="text" id="branchCity"></div>
+      <div class="field"><label>State</label><input type="text" id="branchState"></div>
+      <div class="err-msg" id="branchErr"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('branchModal')">Cancel</button><button class="btn-primary" onclick="saveBranch()">Save</button></div>
+  </div>
+</div>
+
+<!-- Employment Type modal -->
+<div class="modal" id="empTypeModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="empTypeModalTitle">Add Employment Type</h3><button class="modal-close" onclick="closeModal('empTypeModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Code *</label><input type="text" id="empTypeCode"></div>
+      <div class="field"><label>Name *</label><input type="text" id="empTypeName"></div>
+      <div class="err-msg" id="empTypeErr"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('empTypeModal')">Cancel</button><button class="btn-primary" onclick="saveEmpType()">Save</button></div>
+  </div>
+</div>
+
+<!-- Leave Type modal -->
+<div class="modal" id="leaveTypeModal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="leaveTypeModalTitle">Add Leave Type</h3><button class="modal-close" onclick="closeModal('leaveTypeModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Code *</label><input type="text" id="leaveTypeCode"></div>
+      <div class="field"><label>Name *</label><input type="text" id="leaveTypeName"></div>
+      <div class="field"><label>Accrual Frequency</label>
+        <select id="leaveTypeAccrual">
+          <option value="yearly">Yearly</option>
+          <option value="monthly">Monthly</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="field"><label>Default Annual Days</label><input type="number" id="leaveTypeAnnualDays" min="0" step="0.5" value="0"></div>
+      <div class="field"><label><input type="checkbox" id="leaveTypeCarryForward" onchange="document.getElementById('leaveTypeMaxCarryRow').style.display=this.checked?'block':'none'"> Allow Carry Forward</label></div>
+      <div class="field" id="leaveTypeMaxCarryRow" style="display:none;"><label>Max Carry Forward Days</label><input type="number" id="leaveTypeMaxCarry" min="0" step="0.5"></div>
+      <div class="field"><label><input type="checkbox" id="leaveTypeEncashment"> Allow Encashment</label></div>
+      <div class="err-msg" id="leaveTypeErr"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-secondary" onclick="closeModal('leaveTypeModal')">Cancel</button><button class="btn-primary" onclick="saveLeaveType()">Save</button></div>
+  </div>
+</div>
+
+<script>
+let departments = [], designations = [], branches = [], employmentTypes = [], leaveTypes = [];
+let editingDeptId = null, editingDesigId = null, editingBranchId = null, editingEmpTypeId = null, editingLeaveTypeId = null;
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+  setupSidebar();
+  loadAll();
+});
+
+function switchTab(name){
+  ['dept','desig','branch','empType','leaveType'].forEach(t=>{
+    document.getElementById('tabBtn-'+t).classList.toggle('active', t===name);
+    document.getElementById('panel-'+t).classList.toggle('active', t===name);
+  });
+}
+
+async function loadAll(){
+  try{
+    [departments, designations, branches, employmentTypes, leaveTypes] = await Promise.all([
+      window.Api.get('/hr/departments'),
+      window.Api.get('/hr/designations'),
+      window.Api.get('/hr/branches'),
+      window.Api.get('/hr/employment-types'),
+      window.Api.get('/hr/leave-types'),
+    ]);
+    renderDepts(); renderDesigs(); renderBranches(); renderEmpTypes(); renderLeaveTypes();
+  }catch(e){
+    ['deptBody','desigBody','branchBody','empTypeBody','leaveTypeBody'].forEach(id=>{
+      document.getElementById(id).innerHTML = '<tr><td colspan="7" class="empty-state">Could not load: '+escapeHtml(e.message||'Unknown error')+'</td></tr>';
+    });
+  }
+}
+
+function renderDepts(){
+  const body = document.getElementById('deptBody');
+  if(!departments.length){ body.innerHTML = '<tr><td colspan="5" class="empty-state">No departments yet. Click "Add Department" to create one.</td></tr>'; return; }
+  body.innerHTML = departments.map(d=>{
+    const parent = departments.find(p=>p.id===d.parent_department_id);
+    return `<tr class="${d.is_active===false?'inactive-row':''}">
+      <td>${escapeHtml(d.department_code)}</td>
+      <td>${escapeHtml(d.department_name)}</td>
+      <td>${parent?escapeHtml(parent.department_name):'—'}</td>
+      <td>${d.is_active===false?'Inactive':'Active'}</td>
+      <td><button class="action-btn" onclick="openDeptModal(${d.id})"><i class="fa-solid fa-pen"></i> Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+function renderDesigs(){
+  const body = document.getElementById('desigBody');
+  if(!designations.length){ body.innerHTML = '<tr><td colspan="5" class="empty-state">No designations yet. Click "Add Designation" to create one.</td></tr>'; return; }
+  body.innerHTML = designations.map(d=>{
+    const dept = departments.find(p=>p.id===d.department_id);
+    return `<tr class="${d.is_active===false?'inactive-row':''}">
+      <td>${escapeHtml(d.designation_code)}</td>
+      <td>${escapeHtml(d.designation_name)}</td>
+      <td>${dept?escapeHtml(dept.department_name):'—'}</td>
+      <td>${d.is_active===false?'Inactive':'Active'}</td>
+      <td><button class="action-btn" onclick="openDesigModal(${d.id})"><i class="fa-solid fa-pen"></i> Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+function renderBranches(){
+  const body = document.getElementById('branchBody');
+  if(!branches.length){ body.innerHTML = '<tr><td colspan="6" class="empty-state">No branches yet. Click "Add Branch" to create one.</td></tr>'; return; }
+  body.innerHTML = branches.map(b=>`<tr class="${b.is_active===false?'inactive-row':''}">
+    <td>${escapeHtml(b.branch_code)}</td>
+    <td>${escapeHtml(b.branch_name)}</td>
+    <td>${escapeHtml(b.city)||'—'}</td>
+    <td>${escapeHtml(b.state)||'—'}</td>
+    <td>${b.is_active===false?'Inactive':'Active'}</td>
+    <td><button class="action-btn" onclick="openBranchModal(${b.id})"><i class="fa-solid fa-pen"></i> Edit</button></td>
+  </tr>`).join('');
+}
+function renderEmpTypes(){
+  const body = document.getElementById('empTypeBody');
+  if(!employmentTypes.length){ body.innerHTML = '<tr><td colspan="4" class="empty-state">No employment types yet. Click "Add Employment Type" to create one.</td></tr>'; return; }
+  body.innerHTML = employmentTypes.map(t=>`<tr class="${t.is_active===false?'inactive-row':''}">
+    <td>${escapeHtml(t.employment_type_code)}</td>
+    <td>${escapeHtml(t.employment_type_name)}</td>
+    <td>${t.is_active===false?'Inactive':'Active'}</td>
+    <td><button class="action-btn" onclick="openEmpTypeModal(${t.id})"><i class="fa-solid fa-pen"></i> Edit</button></td>
+  </tr>`).join('');
+}
+function renderLeaveTypes(){
+  const body = document.getElementById('leaveTypeBody');
+  if(!leaveTypes.length){ body.innerHTML = '<tr><td colspan="7" class="empty-state">No leave types yet. Click "Add Leave Type" to create one — this is what populates the Leave Type dropdown in Apply for Leave.</td></tr>'; return; }
+  body.innerHTML = leaveTypes.map(t=>`<tr class="${t.is_active===false?'inactive-row':''}">
+    <td>${escapeHtml(t.leave_type_code)}</td>
+    <td>${escapeHtml(t.leave_type_name)}</td>
+    <td>${escapeHtml(t.accrual_frequency)}</td>
+    <td>${t.default_annual_days}</td>
+    <td>${t.allow_carry_forward ? ('Yes (max '+t.max_carry_forward_days+')') : 'No'}</td>
+    <td>${t.is_active===false?'Inactive':'Active'}</td>
+    <td><button class="action-btn" onclick="openLeaveTypeModal(${t.id})"><i class="fa-solid fa-pen"></i> Edit</button></td>
+  </tr>`).join('');
+}
+
+// --- Department ---
+function openDeptModal(id){
+  editingDeptId = id || null;
+  document.getElementById('deptErr').style.display='none';
+  document.getElementById('deptModalTitle').textContent = id ? 'Edit Department' : 'Add Department';
+  const sel = document.getElementById('deptParent');
+  sel.innerHTML = '<option value="">None</option>' + departments.filter(d=>d.id!==id).map(d=>`<option value="${d.id}">${escapeHtml(d.department_name)}</option>`).join('');
+  const d = id ? departments.find(x=>x.id===id) : null;
+  document.getElementById('deptCode').value = d ? d.department_code : '';
+  document.getElementById('deptCode').disabled = !!id; // code is the identity; keep it stable once created
+  document.getElementById('deptName').value = d ? d.department_name : '';
+  sel.value = d && d.parent_department_id ? d.parent_department_id : '';
+  document.getElementById('deptModal').classList.add('active');
+}
+async function saveDept(){
+  const departmentCode = document.getElementById('deptCode').value.trim();
+  const departmentName = document.getElementById('deptName').value.trim();
+  const parentDepartmentId = document.getElementById('deptParent').value || null;
+  const err = document.getElementById('deptErr');
+  if(!departmentName || (!editingDeptId && !departmentCode)){ err.textContent='Department name is required (and code, when creating).'; err.style.display='block'; return; }
+  try{
+    if(editingDeptId) await window.Api.patch('/hr/departments/'+editingDeptId, { departmentName, parentDepartmentId });
+    else await window.Api.post('/hr/departments', { departmentCode, departmentName, parentDepartmentId });
+    closeModal('deptModal');
+    await loadAll();
+  }catch(e){ err.textContent = e.message||'Could not save.'; err.style.display='block'; }
+}
+
+// --- Designation ---
+function openDesigModal(id){
+  editingDesigId = id || null;
+  document.getElementById('desigErr').style.display='none';
+  document.getElementById('desigModalTitle').textContent = id ? 'Edit Designation' : 'Add Designation';
+  const sel = document.getElementById('desigDept');
+  sel.innerHTML = '<option value="">None</option>' + departments.map(d=>`<option value="${d.id}">${escapeHtml(d.department_name)}</option>`).join('');
+  const d = id ? designations.find(x=>x.id===id) : null;
+  document.getElementById('desigCode').value = d ? d.designation_code : '';
+  document.getElementById('desigCode').disabled = !!id;
+  document.getElementById('desigName').value = d ? d.designation_name : '';
+  sel.value = d && d.department_id ? d.department_id : '';
+  document.getElementById('desigModal').classList.add('active');
+}
+async function saveDesig(){
+  const designationCode = document.getElementById('desigCode').value.trim();
+  const designationName = document.getElementById('desigName').value.trim();
+  const departmentId = document.getElementById('desigDept').value || null;
+  const err = document.getElementById('desigErr');
+  if(!designationName || (!editingDesigId && !designationCode)){ err.textContent='Designation name is required (and code, when creating).'; err.style.display='block'; return; }
+  try{
+    if(editingDesigId) await window.Api.patch('/hr/designations/'+editingDesigId, { designationName, departmentId });
+    else await window.Api.post('/hr/designations', { designationCode, designationName, departmentId });
+    closeModal('desigModal');
+    await loadAll();
+  }catch(e){ err.textContent = e.message||'Could not save.'; err.style.display='block'; }
+}
+
+// --- Branch ---
+function openBranchModal(id){
+  editingBranchId = id || null;
+  document.getElementById('branchErr').style.display='none';
+  document.getElementById('branchModalTitle').textContent = id ? 'Edit Branch' : 'Add Branch';
+  const b = id ? branches.find(x=>x.id===id) : null;
+  document.getElementById('branchCode').value = b ? b.branch_code : '';
+  document.getElementById('branchCode').disabled = !!id;
+  document.getElementById('branchName').value = b ? b.branch_name : '';
+  document.getElementById('branchAddress').value = b ? (b.address||'') : '';
+  document.getElementById('branchCity').value = b ? (b.city||'') : '';
+  document.getElementById('branchState').value = b ? (b.state||'') : '';
+  document.getElementById('branchModal').classList.add('active');
+}
+async function saveBranch(){
+  const branchCode = document.getElementById('branchCode').value.trim();
+  const branchName = document.getElementById('branchName').value.trim();
+  const address = document.getElementById('branchAddress').value.trim() || null;
+  const city = document.getElementById('branchCity').value.trim() || null;
+  const state = document.getElementById('branchState').value.trim() || null;
+  const err = document.getElementById('branchErr');
+  if(!branchName || (!editingBranchId && !branchCode)){ err.textContent='Branch name is required (and code, when creating).'; err.style.display='block'; return; }
+  try{
+    if(editingBranchId) await window.Api.patch('/hr/branches/'+editingBranchId, { branchName, address, city, state });
+    else await window.Api.post('/hr/branches', { branchCode, branchName, address, city, state });
+    closeModal('branchModal');
+    await loadAll();
+  }catch(e){ err.textContent = e.message||'Could not save.'; err.style.display='block'; }
+}
+
+// --- Employment Type ---
+function openEmpTypeModal(id){
+  editingEmpTypeId = id || null;
+  document.getElementById('empTypeErr').style.display='none';
+  document.getElementById('empTypeModalTitle').textContent = id ? 'Edit Employment Type' : 'Add Employment Type';
+  const t = id ? employmentTypes.find(x=>x.id===id) : null;
+  document.getElementById('empTypeCode').value = t ? t.employment_type_code : '';
+  document.getElementById('empTypeCode').disabled = !!id;
+  document.getElementById('empTypeName').value = t ? t.employment_type_name : '';
+  document.getElementById('empTypeModal').classList.add('active');
+}
+async function saveEmpType(){
+  const employmentTypeCode = document.getElementById('empTypeCode').value.trim();
+  const employmentTypeName = document.getElementById('empTypeName').value.trim();
+  const err = document.getElementById('empTypeErr');
+  if(!employmentTypeName || (!editingEmpTypeId && !employmentTypeCode)){ err.textContent='Name is required (and code, when creating).'; err.style.display='block'; return; }
+  try{
+    if(editingEmpTypeId) await window.Api.patch('/hr/employment-types/'+editingEmpTypeId, { employmentTypeName });
+    else await window.Api.post('/hr/employment-types', { employmentTypeCode, employmentTypeName });
+    closeModal('empTypeModal');
+    await loadAll();
+  }catch(e){ err.textContent = e.message||'Could not save.'; err.style.display='block'; }
+}
+
+// --- Leave Type ---
+function openLeaveTypeModal(id){
+  editingLeaveTypeId = id || null;
+  document.getElementById('leaveTypeErr').style.display='none';
+  document.getElementById('leaveTypeModalTitle').textContent = id ? 'Edit Leave Type' : 'Add Leave Type';
+  const t = id ? leaveTypes.find(x=>x.id===id) : null;
+  document.getElementById('leaveTypeCode').value = t ? t.leave_type_code : '';
+  document.getElementById('leaveTypeCode').disabled = !!id;
+  document.getElementById('leaveTypeName').value = t ? t.leave_type_name : '';
+  document.getElementById('leaveTypeAccrual').value = t ? t.accrual_frequency : 'yearly';
+  document.getElementById('leaveTypeAccrual').disabled = !!id; // accrual frequency isn't editable after creation — the balances engine assumes it's fixed once accrual has started
+  document.getElementById('leaveTypeAnnualDays').value = t ? t.default_annual_days : 0;
+  document.getElementById('leaveTypeCarryForward').checked = t ? !!t.allow_carry_forward : false;
+  document.getElementById('leaveTypeMaxCarryRow').style.display = (t && t.allow_carry_forward) ? 'block' : 'none';
+  document.getElementById('leaveTypeMaxCarry').value = t && t.max_carry_forward_days != null ? t.max_carry_forward_days : '';
+  document.getElementById('leaveTypeEncashment').checked = t ? !!t.allow_encashment : false;
+  document.getElementById('leaveTypeModal').classList.add('active');
+}
+async function saveLeaveType(){
+  const leaveTypeCode = document.getElementById('leaveTypeCode').value.trim();
+  const leaveTypeName = document.getElementById('leaveTypeName').value.trim();
+  const accrualFrequency = document.getElementById('leaveTypeAccrual').value;
+  const defaultAnnualDays = Number(document.getElementById('leaveTypeAnnualDays').value) || 0;
+  const allowCarryForward = document.getElementById('leaveTypeCarryForward').checked;
+  const maxCarryForwardDaysRaw = document.getElementById('leaveTypeMaxCarry').value;
+  const allowEncashment = document.getElementById('leaveTypeEncashment').checked;
+  const err = document.getElementById('leaveTypeErr');
+  if(!leaveTypeName || (!editingLeaveTypeId && !leaveTypeCode)){ err.textContent='Name is required (and code, when creating).'; err.style.display='block'; return; }
+  if(allowCarryForward && maxCarryForwardDaysRaw===''){ err.textContent='Max Carry Forward Days is required when Allow Carry Forward is checked.'; err.style.display='block'; return; }
+  try{
+    if(editingLeaveTypeId){
+      await window.Api.patch('/hr/leave-types/'+editingLeaveTypeId, {
+        leaveTypeName, defaultAnnualDays, allowCarryForward,
+        maxCarryForwardDays: allowCarryForward ? Number(maxCarryForwardDaysRaw) : null,
+        allowEncashment,
+      });
+    } else {
+      await window.Api.post('/hr/leave-types', {
+        leaveTypeCode, leaveTypeName, accrualFrequency, defaultAnnualDays, allowCarryForward,
+        maxCarryForwardDays: allowCarryForward ? Number(maxCarryForwardDaysRaw) : null,
+        allowEncashment,
+      });
+    }
+    closeModal('leaveTypeModal');
+    await loadAll();
+  }catch(e){ err.textContent = e.message||'Could not save.'; err.style.display='block'; }
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

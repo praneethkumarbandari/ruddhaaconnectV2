@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trial Balance</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+</style>
+</head>
+<body>
+
+  <div class="main" id="mainContent">
+    <div class="page-header"><h2>Trial Balance</h2></div>
+    <!--
+      NOTE: the original version of this page recomputed the trial
+      balance client-side from raw journal_entries/journal_entry_lines
+      Supabase queries — reimplementing logic the backend already owns.
+      This now calls GET /api/reports/trial-balance directly, which
+      also means it automatically benefits from the asOfDate fix
+      (Patch 1, Defect 1) rather than carrying its own copy of the bug.
+    -->
+    <div class="filter-bar">
+        <label style="font-size:13px;font-weight:600;color:#555">As of:</label>
+        <input type="date" id="fAsOf">
+        <button class="btn-primary" onclick="loadData()">Generate</button>
+    </div>
+    <div id="reportArea"><div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);padding:60px;text-align:center;color:#aaa;font-size:14px;">Select a date and click Generate to view the trial balance.</div></div>
+  </div>
+</div>
+
+
+<script>
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded',async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    document.getElementById('fAsOf').value=new Date().toISOString().split('T')[0];
+    setupSidebar();
+});
+
+async function loadData(){
+    const area=document.getElementById('reportArea');
+    area.innerHTML='<div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);padding:60px;text-align:center;color:#aaa;font-size:14px;">Generating…</div>';
+    const asOf=document.getElementById('fAsOf').value;
+    try{
+        const tb = await window.Api.get('/reports/trial-balance?asOfDate='+encodeURIComponent(asOf));
+        const rows = (tb.rows||[]).map(r=>`<tr>
+            <td>${r.account_code} — ${escapeHtml(r.account_name)}</td>
+            <td class="debit-col">${Number(r.total_debit)>0?'₹'+fmt(r.total_debit):''}</td>
+            <td class="credit-col">${Number(r.total_credit)>0?'₹'+fmt(r.total_credit):''}</td>
+        </tr>`).join('');
+        area.innerHTML=`<div class="report-card">
+            <div class="report-title">Trial Balance as of ${asOf} <span class="${tb.balanced?'balanced':'unbalanced'}">${tb.balanced?'✓ Balanced':'✗ Not Balanced'}</span></div>
+            <table>
+                <thead><tr><th>Account</th><th>Debit (₹)</th><th>Credit (₹)</th></tr></thead>
+                <tbody>${rows||'<tr><td colspan="3" class="empty-state">No data found for this date.</td></tr>'}
+                <tr class="total-row"><td>TOTAL</td><td>₹${fmt(tb.debitTotal)}</td><td>₹${fmt(tb.creditTotal)}</td></tr></tbody>
+            </table></div>`;
+    }catch(e){
+        area.innerHTML='<div style="background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.08);padding:60px;text-align:center;color:#c0392b;font-size:14px;">Could not generate trial balance: '+(e.message||'Unknown error')+'</div>';
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

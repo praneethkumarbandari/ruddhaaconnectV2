@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salary Management</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .run-row { cursor: pointer; }
+  .run-row.selected { background: rgba(0,0,0,0.04); }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Salary Management</h2>
+    <button class="btn-primary" onclick="openNewRunModal()"><i class="fa-solid fa-plus"></i> New Payroll Run</button>
+  </div>
+  <!--
+    NOTE: This page now talks to the Payroll Engine API
+    (/api/payroll/runs, /api/payroll/reports) instead of showing a
+    "not built yet" placeholder. A payroll run is created for a
+    period, processed (computes each employee's payroll_lines from
+    salary structures + attendance + leave), then locked before
+    posting to Accounting. Selecting a run below shows its register.
+  -->
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Total Runs</h4><div class="s-val" id="cntRuns">—</div></div>
+    <div class="summary-card"><h4>Draft / Processed</h4><div class="s-val" id="cntOpen">—</div></div>
+    <div class="summary-card"><h4>Locked</h4><div class="s-val" id="cntLocked">—</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Run Type</th><th>Period</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="runsBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div id="registerSection" style="display:none;margin-top:24px;">
+    <div class="page-header"><h3 id="registerTitle">Payroll Register</h3></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Employee Code</th><th>Name</th><th>Department</th><th>Gross Pay</th><th>Net Pay</th></tr></thead>
+        <tbody id="registerBody"><tr><td colspan="6" class="empty-state">Select a run above.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="runModal">
+  <div class="modal">
+    <div class="modal-header"><h3>New Payroll Run</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="runModalMsg"></div>
+      <div class="field"><label>Run Type *</label>
+        <select id="fRunType"><option value="monthly">Monthly</option><option value="off_cycle">Off-Cycle</option></select>
+      </div>
+      <div class="field"><label>Period Start *</label><input type="date" id="fPeriodStart"></div>
+      <div class="field"><label>Period End *</label><input type="date" id="fPeriodEnd"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="createRun()">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allRuns = [], selectedRunId = null;
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadRuns();
+});
+
+async function loadRuns(){
+    try {
+        allRuns = await window.Api.get('/payroll/runs');
+        renderRuns(allRuns);
+        updateSummary(allRuns);
+    } catch(e) {
+        document.getElementById('runsBody').innerHTML = '<tr><td colspan="5" class="empty-state">Could not load payroll runs: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function updateSummary(rows){
+    document.getElementById('cntRuns').textContent = rows.length;
+    document.getElementById('cntOpen').textContent = rows.filter(r=>r.status==='draft'||r.status==='processed').length;
+    document.getElementById('cntLocked').textContent = rows.filter(r=>r.status==='locked'||r.status==='posted').length;
+}
+function renderRuns(rows){
+    const tbody = document.getElementById('runsBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No payroll runs yet. Click "New Payroll Run" to create the first one.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr class="run-row ${String(r.id)===String(selectedRunId)?'selected':''}" onclick="selectRun(${r.id})">
+        <td>${i+1}</td>
+        <td>${r.run_type||'—'}</td>
+        <td>${r.period_start?String(r.period_start).split('T')[0]:'—'} – ${r.period_end?String(r.period_end).split('T')[0]:'—'}</td>
+        <td><span class="badge ${r.status==='locked'||r.status==='posted'?'active':'inactive'}">${r.status||'—'}</span></td>
+        <td onclick="event.stopPropagation()">
+            ${r.status==='draft'?'<button class="action-btn" onclick="processRun('+r.id+')" title="Process">▶️</button>':''}
+            ${r.status==='processed'?'<button class="action-btn" onclick="lockRun('+r.id+')" title="Lock"><i class="fa-solid fa-lock"></i> </button>':''}
+        </td>
+    </tr>`).join('');
+}
+async function selectRun(runId){
+    selectedRunId = runId;
+    renderRuns(allRuns);
+    document.getElementById('registerSection').style.display = 'block';
+    const run = allRuns.find(r=>String(r.id)===String(runId));
+    document.getElementById('registerTitle').textContent = 'Payroll Register — ' + (run ? (run.run_type+' ('+String(run.period_start).split('T')[0]+' to '+String(run.period_end).split('T')[0]+')') : '');
+    try {
+        const rows = await window.Api.get('/payroll/reports/register/'+runId);
+        const tbody = document.getElementById('registerBody');
+        if(!rows.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No payroll lines yet — process this run first.</td></tr>'; return; }
+        tbody.innerHTML = rows.map((r,i)=>`<tr>
+            <td>${i+1}</td>
+            <td>${r.employee_code||'—'}</td>
+            <td>${escapeHtml(r.employee_name)||'—'}</td>
+            <td>${escapeHtml(r.department_name)||'—'}</td>
+            <td>${r.gross_pay!=null?Number(r.gross_pay).toFixed(2):'—'}</td>
+            <td>${r.net_pay!=null?Number(r.net_pay).toFixed(2):'—'}</td>
+        </tr>`).join('');
+    } catch(e) {
+        document.getElementById('registerBody').innerHTML = '<tr><td colspan="6" class="empty-state">Could not load register: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+async function processRun(runId){
+    if(!confirm('Process this payroll run? This recomputes every eligible employee\'s payroll line from current attendance, leave, and salary structure data.')) return;
+    try {
+        await window.Api.post('/payroll/runs/'+runId+'/process', {});
+        if(window.Audit) window.Audit.log('payroll_runs', runId, 'PROCESS', null, null);
+        loadRuns();
+    } catch(e) { alert('Could not process run: '+(e.message||'Unknown error')); }
+}
+async function lockRun(runId){
+    if(!confirm('Lock this payroll run? Locked runs can only be reopened by an authorized user.')) return;
+    try {
+        await window.Api.post('/payroll/runs/'+runId+'/lock', {});
+        if(window.Audit) window.Audit.log('payroll_runs', runId, 'LOCK', null, null);
+        loadRuns();
+    } catch(e) { alert('Could not lock run: '+(e.message||'Unknown error')); }
+}
+function openNewRunModal(){
+    document.getElementById('fRunType').value = 'monthly';
+    document.getElementById('fPeriodStart').value = '';
+    document.getElementById('fPeriodEnd').value = '';
+    document.getElementById('runModalMsg').textContent = '';
+    document.getElementById('runModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('runModal').classList.remove('active'); }
+async function createRun(){
+    const payload = {
+        runType: document.getElementById('fRunType').value,
+        periodStart: document.getElementById('fPeriodStart').value,
+        periodEnd: document.getElementById('fPeriodEnd').value,
+    };
+    if(!payload.periodStart || !payload.periodEnd){
+        document.getElementById('runModalMsg').textContent = 'Period start and end are required.';
+        return;
+    }
+    try {
+        await window.Api.post('/payroll/runs', payload);
+        if(window.Audit) window.Audit.log('payroll_runs', 'new', 'CREATE', null, payload);
+        closeModal();
+        loadRuns();
+    } catch(e) {
+        document.getElementById('runModalMsg').textContent = 'Could not create run: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

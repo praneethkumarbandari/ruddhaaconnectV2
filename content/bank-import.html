@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bank Statement Import</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{margin-bottom:18px;}
+.card{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:20px;margin-bottom:18px;}
+.card h3{margin:0 0 14px;font-size:14px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:8px 10px;border-bottom:1px solid #f0f2f6;}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;}
+.badge.matched,.badge.posted{background:#d4edda;color:#155724;}
+.badge.pending,.badge.draft_created{background:#fff3cd;color:#856404;}
+.state-box{text-align:center;padding:30px;color:#aaa;}
+.msg-box{padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:14px;}
+.msg-box.error{background:#fdecea;color:#c62828;}
+.msg-box.success{background:#e8f5e9;color:#2e7d32;}
+.back-link{color:var(--primary-color,#1f6bff);cursor:pointer;font-size:13px;margin-bottom:12px;display:inline-block;}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="page-header"><h2>Bank Statement Import</h2></div>
+
+  <div id="uploadView">
+    <div class="card">
+      <h3>Upload a New Statement</h3>
+      <div id="uploadMsg"></div>
+      <div class="field"><label>Bank Account *</label>
+        <select id="fBankAccount"><option value="">Select account…</option></select>
+      </div>
+      <div class="field"><label>Statement File (CSV/XLSX) *</label><input type="file" id="fFile" accept=".csv,.xlsx,.xls"></div>
+      <button class="btn-primary" onclick="previewFile()">Preview</button>
+    </div>
+
+    <div class="card" id="previewCard" style="display:none;">
+      <h3>Preview</h3>
+      <div id="previewSummary"></div>
+      <table id="previewTable" style="margin-top:12px;"></table>
+      <div style="margin-top:14px;"><button class="btn-primary" onclick="commitFile()"><i class="fa-solid fa-check"></i> Commit Import</button></div>
+    </div>
+
+    <div class="card">
+      <h3>Import History</h3>
+      <table>
+        <thead><tr><th>Date</th><th>File</th><th>Bank Account</th><th>Rows</th><th>Status</th><th></th></tr></thead>
+        <tbody id="historyBody"><tr><td colspan="6" class="state-box">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="batchView" style="display:none;">
+    <span class="back-link" onclick="showUploadView()">← Back to Import History</span>
+    <div class="card">
+      <h3>Batch Rows</h3>
+      <table>
+        <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Party</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="rowsBody"><tr><td colspan="6" class="state-box">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let lastPreview = null, allParties = null;
+
+window.addEventListener('DOMContentLoaded', async function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+  try {
+    const accounts = await window.Api.get('/bank-accounts/accounts');
+    document.getElementById('fBankAccount').innerHTML = '<option value="">Select account…</option>' +
+      accounts.map(a=>`<option value="${a.account_code}">${a.account_name} (${a.account_code})</option>`).join('');
+  } catch(e) {}
+  loadHistory();
+});
+
+// Raw upload helper — window.Api always forces JSON + stringifies the
+// body, which is fundamentally incompatible with multipart file
+// uploads. This bypasses it just for the two upload endpoints,
+// carrying the same auth token by hand instead.
+async function uploadFile(path, formData){
+  const token = localStorage.getItem('rc_token');
+  const resp = await fetch(window.RUDDHAA_API_BASE_URL + path, {
+    method: 'POST',
+    headers: token ? { Authorization: 'Bearer ' + token } : {},
+    body: formData,
+  });
+  const body = await resp.json().catch(()=>null);
+  if (!resp.ok) throw new Error((body && body.error) || 'Upload failed.');
+  return body;
+}
+
+async function previewFile(){
+  const msg = document.getElementById('uploadMsg');
+  const bankAccountCode = document.getElementById('fBankAccount').value;
+  const file = document.getElementById('fFile').files[0];
+  if (!bankAccountCode) { msg.innerHTML = '<div class="msg-box error">Select a bank account first.</div>'; return; }
+  if (!file) { msg.innerHTML = '<div class="msg-box error">Choose a file first.</div>'; return; }
+  msg.innerHTML = '';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const result = await uploadFile('/bank-import/preview', fd);
+    lastPreview = result;
+    document.getElementById('previewSummary').innerHTML =
+      `<p style="font-size:13px;color:#555;">${result.totalDataRows} rows detected.
+       ${result.mappingComplete ? '<span style="color:#1a7a3c;">Column mapping auto-detected successfully.</span>' : '<span style="color:#c0392b;">Missing required columns: '+result.missingRequiredFields.join(', ')+'</span>'}</p>`;
+    const headers = result.headers;
+    document.getElementById('previewTable').innerHTML =
+      '<thead><tr>'+headers.map(h=>`<th>${h}</th>`).join('')+'</tr></thead>' +
+      '<tbody>'+result.previewRows.map(r=>'<tr>'+headers.map(h=>`<td>${r[h]??''}</td>`).join('')+'</tr>').join('')+'</tbody>';
+    document.getElementById('previewCard').style.display = result.mappingComplete ? 'block' : 'none';
+    if (!result.mappingComplete) msg.innerHTML = '<div class="msg-box error">Cannot commit — required columns are missing from this file.</div>';
+  } catch(e) {
+    msg.innerHTML = '<div class="msg-box error">'+(e.message||'Could not preview file.')+'</div>';
+  }
+}
+
+async function commitFile(){
+  const msg = document.getElementById('uploadMsg');
+  const bankAccountCode = document.getElementById('fBankAccount').value;
+  const file = document.getElementById('fFile').files[0];
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('bankAccountCode', bankAccountCode);
+  fd.append('mapping', JSON.stringify(lastPreview.suggestedMapping));
+  try {
+    await uploadFile('/bank-import', fd);
+    msg.innerHTML = '<div class="msg-box success">✅ Import committed successfully.</div>';
+    document.getElementById('previewCard').style.display = 'none';
+    document.getElementById('fFile').value = '';
+    loadHistory();
+  } catch(e) {
+    msg.innerHTML = '<div class="msg-box error">'+(e.message||'Could not commit import.')+'</div>';
+  }
+}
+
+async function loadHistory(){
+  const body = document.getElementById('historyBody');
+  try {
+    const batches = await window.Api.get('/bank-import/history');
+    if (!batches.length) { body.innerHTML = '<tr><td colspan="6" class="state-box">No imports yet.</td></tr>'; return; }
+    body.innerHTML = batches.map(b=>`<tr>
+      <td>${new Date(b.imported_at).toLocaleDateString('en-IN')}</td>
+      <td>${b.file_name}</td>
+      <td>${b.bank_account_code}</td>
+      <td>${b.total_rows ?? '—'}</td>
+      <td>${b.status}</td>
+      <td><button class="btn-secondary" onclick="openBatch(${b.id})">View Rows</button></td>
+    </tr>`).join('');
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="6" class="state-box">Could not load history: '+(e.message||'')+'</td></tr>';
+  }
+}
+
+async function ensurePartiesLoaded(){
+  if (allParties) return allParties;
+  const [customers, vendors] = await Promise.all([window.Api.get('/customers'), window.Api.get('/vendors')]);
+  allParties = [
+    ...customers.map(c=>({ id:c.id, name:c.customer_name, kind:'customer' })),
+    ...vendors.map(v=>({ id:v.id, name:v.vendor_name, kind:'vendor' })),
+  ];
+  return allParties;
+}
+
+async function openBatch(batchId){
+  document.getElementById('uploadView').style.display = 'none';
+  document.getElementById('batchView').style.display = 'block';
+  const body = document.getElementById('rowsBody');
+  body.innerHTML = '<tr><td colspan="6" class="state-box">Loading…</td></tr>';
+  await ensurePartiesLoaded();
+  try {
+    const rows = await window.Api.get('/bank-import/'+batchId+'/rows');
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="state-box">No rows in this batch.</td></tr>'; return; }
+    body.innerHTML = rows.map(r=>{
+      let actions = '';
+      let partyName = '—';
+      if (r.matched_party_id) {
+        const p = allParties.find(x => x.kind === r.matched_party_type && String(x.id) === String(r.matched_party_id));
+        partyName = p ? p.name : (r.matched_party_type+' #'+r.matched_party_id);
+      }
+      if (r.status === 'ready_for_draft' && !r.matched_party_id) {
+        actions = `<select onchange="matchParty(${r.id}, this.value)"><option value="">Match party…</option>` +
+          allParties.map(p=>`<option value="${p.kind}:${p.id}">${p.name} (${p.kind})</option>`).join('') + `</select>`;
+      } else if (r.status === 'ready_for_draft' && r.matched_party_id) {
+        actions = `<button class="btn-secondary" onclick="createDraft(${r.id})">Create Draft</button>`;
+      } else if (r.status === 'draft_created') {
+        actions = `<button class="btn-primary" onclick="postRow(${r.id})">Post</button>`;
+      } else if (r.status === 'posted') {
+        actions = '✓ Posted';
+      } else {
+        actions = `<span style="color:#c0392b;">${r.status}</span>`;
+      }
+      return `<tr>
+        <td>${new Date(r.transaction_date).toLocaleDateString('en-IN')}</td>
+        <td>${escapeHtml(r.description)||'—'}</td>
+        <td>₹${Number(r.amount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+        <td>${partyName}</td>
+        <td><span class="badge ${r.status}">${r.status}</span></td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="6" class="state-box">Could not load rows: '+(e.message||'')+'</td></tr>';
+  }
+  window._currentBatchId = batchId;
+}
+
+async function matchParty(rowId, value){
+  if (!value) return;
+  const [partyType, partyId] = value.split(':');
+  try {
+    await window.Api.post('/bank-import/rows/'+rowId+'/match-party', { partyType, partyId: Number(partyId) });
+    openBatch(window._currentBatchId);
+  } catch(e) { alert('Could not match party: '+(e.message||'Unknown error')); }
+}
+async function createDraft(rowId){
+  try {
+    await window.Api.post('/bank-import/rows/'+rowId+'/create-draft', { allocations: [] });
+    openBatch(window._currentBatchId);
+  } catch(e) { alert('Could not create draft: '+(e.message||'Unknown error')); }
+}
+async function postRow(rowId){
+  if (!confirm('Post this transaction? This creates a real journal entry.')) return;
+  try {
+    await window.Api.post('/bank-import/rows/'+rowId+'/post', {});
+    openBatch(window._currentBatchId);
+  } catch(e) { alert('Could not post: '+(e.message||'Unknown error')); }
+}
+function showUploadView(){
+  document.getElementById('batchView').style.display = 'none';
+  document.getElementById('uploadView').style.display = 'block';
+  loadHistory();
+}
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

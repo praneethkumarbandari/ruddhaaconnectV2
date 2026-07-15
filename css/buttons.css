@@ -1,0 +1,245 @@
+/* ========================================
+   RUDDHAACONNECT - BUTTONS
+   ======================================== */
+
+@import url('variables.css');
+
+button,
+.btn {
+    padding: 9px 20px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+button:hover,
+.btn:hover {
+    opacity: 0.9;
+}
+
+button:active,
+.btn:active {
+    transform: scale(0.98);
+}
+
+button:disabled,
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+button:focus,
+.btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(31, 107, 255, 0.2);
+}
+
+/* ══ BUTTON SIZES ══ */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.btn-lg {
+    padding: 12px 28px;
+    font-size: 14px;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+/* ══ BUTTON VARIANTS ══ */
+.btn-primary {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+.btn-secondary {
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.btn-secondary:hover {
+    background: #e8e8e8;
+}
+
+.btn-success {
+    background: #4caf50;
+    color: #fff;
+}
+
+.btn-success:hover {
+    opacity: 0.9;
+}
+
+.btn-danger {
+    background: #e53935;
+    color: #fff;
+}
+
+.btn-danger:hover {
+    opacity: 0.9;
+}
+
+.btn-warning {
+    background: #ff9800;
+    color: #fff;
+}
+
+.btn-warning:hover {
+    opacity: 0.9;
+}
+
+.btn-info {
+    background: #2196f3;
+    color: #fff;
+}
+
+.btn-info:hover {
+    opacity: 0.9;
+}
+
+/* ══ OUTLINE BUTTONS ══ */
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+}
+
+.btn-outline:hover {
+    background: rgba(31, 107, 255, 0.05);
+}
+
+.btn-outline-secondary {
+    background: transparent;
+    border: 1px solid #ddd;
+    color: #333;
+}
+
+.btn-outline-secondary:hover {
+    background: #f9f9f9;
+}
+
+.btn-outline-danger {
+    background: transparent;
+    border: 1px solid #e53935;
+    color: #e53935;
+}
+
+.btn-outline-danger:hover {
+    background: rgba(229, 57, 53, 0.05);
+}
+
+/* ══ LINK BUTTONS ══ */
+.btn-link {
+    background: transparent;
+    color: var(--primary-color);
+    border: none;
+    padding: 0;
+    font-weight: 500;
+    text-decoration: underline;
+}
+
+.btn-link:hover {
+    opacity: 0.8;
+}
+
+/* ══ ICON BUTTONS ══ */
+.btn-icon {
+    padding: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ══ BUTTON GROUPS ══ */
+.btn-group {
+    display: inline-flex;
+    gap: 8px;
+}
+
+.btn-group.vertical {
+    flex-direction: column;
+}
+
+.btn-group.fill {
+    width: 100%;
+}
+
+.btn-group.fill button,
+.btn-group.fill .btn {
+    flex: 1;
+}
+
+/* ══ ACTION BUTTONS ══ */
+.btn-new {
+    background: #4caf50;
+}
+
+.btn-edit {
+    background: #2196f3;
+}
+
+.btn-delete {
+    background: #e53935;
+}
+
+.btn-save {
+    background: #4caf50;
+}
+
+.btn-cancel {
+    background: #999;
+}
+
+.btn-export {
+    background: #ff9800;
+}
+
+.btn-search {
+    background: #2196f3;
+}
+
+.btn-filter {
+    background: #2196f3;
+}
+
+.btn-reset {
+    background: #999;
+}
+
+/* ══ BUTTON LOADING STATE ══ */
+.btn.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.btn.loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-left: 6px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

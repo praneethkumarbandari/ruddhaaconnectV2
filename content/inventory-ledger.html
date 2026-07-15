@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Ledger</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.table-wrap{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:10px 12px;border-bottom:1px solid #f0f2f6;}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;}
+.badge.in{background:#d4edda;color:#155724;} .badge.out{background:#f8d7da;color:#721c24;}
+.state-box{text-align:center;padding:40px;color:#aaa;}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="page-header"><h2>Inventory Ledger</h2></div>
+
+  <div class="filter-bar">
+    <select id="fItem"><option value="">All items</option></select>
+    <label style="font-size:13px;font-weight:600;color:#555;">From:</label>
+    <input type="date" id="fFrom">
+    <label style="font-size:13px;font-weight:600;color:#555;">To:</label>
+    <input type="date" id="fTo">
+    <button class="btn-primary" onclick="applyFilters()">Filter</button>
+    <button class="btn-secondary" onclick="clearFilters()">Clear</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Qty</th><th>Balance After</th><th>Remarks</th></tr></thead>
+      <tbody id="ledgerBody"><tr><td colspan="6" class="state-box">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let itemsById = {}, allTransactions = [];
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+  loadLedger();
+});
+
+async function loadLedger(){
+  const body = document.getElementById('ledgerBody');
+  body.innerHTML = '<tr><td colspan="6" class="state-box">Loading…</td></tr>';
+  try {
+    const { items, transactions } = await window.Api.get('/inventory');
+    itemsById = {}; items.forEach(i=>itemsById[i.id]=i);
+    allTransactions = transactions;
+    document.getElementById('fItem').innerHTML = '<option value="">All items</option>' +
+      items.map(i=>`<option value="${i.id}">${i.name} (${i.code})</option>`).join('');
+    renderTable(allTransactions);
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="6" class="state-box">Could not load ledger: '+(e.message||'')+'</td></tr>';
+  }
+}
+function fmt(n){ return (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:3}); }
+
+function renderTable(rows){
+  const body = document.getElementById('ledgerBody');
+  if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="state-box">No stock movements found.</td></tr>'; return; }
+  body.innerHTML = [...rows].reverse().map(t=>{
+    const item = itemsById[t.item_id];
+    return `<tr>
+      <td>${new Date(t.transaction_date).toLocaleDateString('en-IN')}</td>
+      <td>${item ? item.name+' ('+item.code+')' : 'Item #'+t.item_id}</td>
+      <td><span class="badge ${t.transaction_type.toLowerCase()}">${t.transaction_type}</span></td>
+      <td>${fmt(t.qty)} ${item ? item.uom : ''}</td>
+      <td>${fmt(t.balance_after)}</td>
+      <td>${t.remarks||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function applyFilters(){
+  const itemId = document.getElementById('fItem').value;
+  const from = document.getElementById('fFrom').value;
+  const to = document.getElementById('fTo').value;
+  let rows = allTransactions;
+  if (itemId) rows = rows.filter(t => String(t.item_id) === itemId);
+  if (from) rows = rows.filter(t => t.transaction_date >= from);
+  if (to) rows = rows.filter(t => t.transaction_date <= to);
+  renderTable(rows);
+}
+function clearFilters(){
+  document.getElementById('fItem').value='';
+  document.getElementById('fFrom').value='';
+  document.getElementById('fTo').value='';
+  renderTable(allTransactions);
+}
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

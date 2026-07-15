@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM — Dashboard</title>
+<script>(function(){try{var t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>CRM — Dashboard</h2>
+  </div>
+  <!--
+    NOTE: Aggregates the same crm_leads / crm_followups / crm_activities
+    tables the other three CRM pages read and write directly (no
+    backend route exists for CRM yet — same pattern as Costing).
+  -->
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Total Leads</h4><div class="s-val" id="cntLeads">—</div></div>
+    <div class="summary-card"><h4>Open Leads</h4><div class="s-val" id="cntOpenLeads">—</div></div>
+    <div class="summary-card"><h4>Won</h4><div class="s-val" id="cntWon">—</div></div>
+    <div class="summary-card"><h4>Pipeline Value</h4><div class="s-val" id="cntPipeline">—</div></div>
+    <div class="summary-card"><h4>Pending Follow-ups</h4><div class="s-val" id="cntPendingFollowups">—</div></div>
+    <div class="summary-card"><h4>Activities This Week</h4><div class="s-val" id="cntActivitiesWeek">—</div></div>
+  </div>
+
+  <div class="page-header" style="margin-top:24px;"><h3>Upcoming Follow-ups</h3></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Lead</th><th>Due Date</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody id="upcomingBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="page-header" style="margin-top:24px;"><h3>Recent Activity</h3></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Lead</th><th>Date</th><th>Type</th><th>Summary</th></tr></thead>
+      <tbody id="recentActivityBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let leads = [];
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth || !window.Auth.isAuthenticated()) {
+        const stored = localStorage.getItem('loggedEmployee');
+        if (!stored) { window.top.location.href = '/business-login.html'; return; }
+    }
+    const emp = window.Auth ? window.Auth.getEmployee() : JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||emp.name||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    await loadAll();
+});
+
+function leadLabel(id){ const l = leads.find(x=>String(x.id)===String(id)); return l ? l.lead_name : ('#'+id); }
+
+async function loadAll(){
+    let leadRows = [], followupRows = [], activityRows = [];
+    try {
+        const ld = await window.Api.get('/crm/leads').catch(()=>[]);
+        leadRows = ld || [];
+    } catch(e) { /* table may not exist yet */ }
+    leads = leadRows;
+
+    try {
+        const fd = await window.Api.get('/crm/followups').catch(()=>[]);
+        followupRows = fd || [];
+    } catch(e) { /* table may not exist yet */ }
+
+    try {
+        const ad = await window.Api.get('/crm/activities').catch(()=>[]);
+        activityRows = ad || [];
+    } catch(e) { /* table may not exist yet */ }
+
+    document.getElementById('cntLeads').textContent = leadRows.length || '—';
+    document.getElementById('cntOpenLeads').textContent = leadRows.filter(r=>['new','contacted','qualified'].includes(r.status)).length;
+    document.getElementById('cntWon').textContent = leadRows.filter(r=>r.status==='won').length;
+    document.getElementById('cntPipeline').textContent = leadRows.filter(r=>['new','contacted','qualified'].includes(r.status)).reduce((s,r)=>s+Number(r.estimated_value||0),0).toFixed(2);
+
+    const pending = followupRows.filter(r=>r.status==='pending');
+    document.getElementById('cntPendingFollowups').textContent = pending.length;
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+    document.getElementById('cntActivitiesWeek').textContent = activityRows.filter(r=>r.activity_date && new Date(r.activity_date) >= weekAgo).length;
+
+    const upcomingBody = document.getElementById('upcomingBody');
+    const upcoming = pending.slice(0, 10);
+    upcomingBody.innerHTML = upcoming.length ? upcoming.map((r,i)=>`<tr>
+        <td>${i+1}</td><td>${r.lead_id?leadLabel(r.lead_id):'—'}</td>
+        <td>${r.due_date?String(r.due_date).split('T')[0]:'—'}</td><td>${r.followup_type||'—'}</td><td>${escapeHtml(r.notes)||'—'}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No pending follow-ups.</td></tr>';
+
+    const recentBody = document.getElementById('recentActivityBody');
+    const recent = activityRows.slice(0, 10);
+    recentBody.innerHTML = recent.length ? recent.map((r,i)=>`<tr>
+        <td>${i+1}</td><td>${r.lead_id?leadLabel(r.lead_id):'—'}</td>
+        <td>${r.activity_date?String(r.activity_date).split('T')[0]:'—'}</td><td>${r.activity_type||'—'}</td><td>${escapeHtml(r.summary)||'—'}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No activity logged yet.</td></tr>';
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){ if(window.Auth) window.Auth.logout(); else { localStorage.removeItem('loggedEmployee'); window.top.location.href='/business-login.html'; } }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

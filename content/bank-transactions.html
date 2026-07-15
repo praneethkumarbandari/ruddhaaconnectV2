@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bank & Cash</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+.action-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px;flex-wrap:wrap;}
+.search-box{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e6ee;border-radius:8px;padding:8px 12px;min-width:220px;}
+.search-box input{border:none;outline:none;flex:1;font-size:13px;}
+.table-wrap{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:10px 12px;border-bottom:1px solid #f0f2f6;}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;}
+.badge.success{background:#d4edda;color:#155724;}
+.state-box{text-align:center;padding:40px;color:#aaa;}
+.net-position-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;}
+.np-card{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:16px 20px;}
+.np-card h4{font-size:11px;text-transform:uppercase;color:#8a93a6;font-weight:700;margin-bottom:8px;}
+.np-card .np-val{font-size:20px;font-weight:900;color:#111;}
+.np-card.net .np-val{color:var(--primary-color,#1f6bff);}
+@media(max-width:900px){.net-position-cards{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Bank &amp; Cash Accounts</h2>
+    <button class="btn btn-secondary" onclick="runBackfillOpeningBalances()" title="Posts a real journal entry for any bank account's opening balance that was entered but never posted to the ledger. Safe to click more than once — already-posted accounts are skipped, never double-posted.">
+      <i class="fa-solid fa-scale-balanced"></i> Post Opening Balances to Ledger
+    </button>
+  </div>
+
+  <div class="net-position-cards" id="netPositionCards">
+    <div class="np-card"><h4>Total Opening Balance</h4><div class="np-val" id="npOpening">—</div></div>
+    <div class="np-card"><h4>Total Debits</h4><div class="np-val" id="npDebits">—</div></div>
+    <div class="np-card"><h4>Total Credits</h4><div class="np-val" id="npCredits">—</div></div>
+    <div class="np-card net"><h4>Total Net Position</h4><div class="np-val" id="npNet">—</div></div>
+  </div>
+
+  <div class="action-bar">
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Add Bank Account</button>
+    <div class="search-box">🔍<input type="text" id="searchInput" placeholder="Search accounts…" oninput="applySearch()"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Account Name</th><th>Type</th><th>Ledger Account</th><th>Opening Balance</th><th>Bank / Number</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="accountsBody"><tr><td colspan="7" class="state-box">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="accountModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="modalTitle">Add Bank Account</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="field"><label>Account Type *</label>
+        <select id="fAccType" onchange="toggleBankFields()">
+          <option value="Cash">Cash</option>
+          <option value="Petty Cash">Petty Cash</option>
+          <option value="Savings Account">Savings Account</option>
+          <option value="Current Account">Current Account</option>
+          <option value="OD">OD</option>
+          <option value="Credit Card">Credit Card</option>
+          <option value="Wallet">Wallet</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="field"><label>Account Name *</label><input type="text" id="fAccName"></div>
+      <div class="field"><label>Opening Balance *</label><input type="number" id="fOpeningBalance" value="0" step="0.01"></div>
+      <div class="field">
+        <label>Ledger Account (Chart of Accounts) *</label>
+        <select id="fLedgerCode"><option value="">Loading…</option></select>
+      </div>
+      <div id="bankFieldsGroup" style="display:none;">
+        <div class="field"><label>Bank Name</label><input type="text" id="fBankName"></div>
+        <div class="field-row">
+          <div class="field"><label>Account Number</label><input type="text" id="fAccountNumber"></div>
+          <div class="field"><label>IFSC</label><input type="text" id="fIfsc"></div>
+        </div>
+      </div>
+      <p id="modalMsg" style="color:#c0392b;font-size:13px;"></p>
+    </div>
+    <div class="modal-footer"><button class="btn-primary" onclick="saveAccount()">Save</button></div>
+  </div>
+</div>
+
+<script>
+let allAccounts = [];
+const BANK_TYPES = ['Savings Account','Current Account','OD','Credit Card'];
+
+window.addEventListener('DOMContentLoaded', function(){
+  if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+  loadAccounts();
+  loadNetPosition();
+});
+
+async function loadNetPosition(){
+  try{
+    const d = await window.Api.get('/bank-accounts/net-position');
+    document.getElementById('npOpening').textContent = '₹'+fmt(d.total_opening);
+    document.getElementById('npDebits').textContent = '₹'+fmt(d.total_debits);
+    document.getElementById('npCredits').textContent = '₹'+fmt(d.total_credits);
+    document.getElementById('npNet').textContent = '₹'+fmt(d.total_net);
+  }catch(e){
+    ['npOpening','npDebits','npCredits','npNet'].forEach(id=>document.getElementById(id).textContent='—');
+  }
+}
+
+async function loadAccounts(){
+  const body = document.getElementById('accountsBody');
+  body.innerHTML = '<tr><td colspan="7" class="state-box">Loading…</td></tr>';
+  try {
+    allAccounts = await window.Api.get('/bank-accounts/accounts');
+    renderTable(allAccounts);
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="7" class="state-box">Could not load bank accounts: '+(e.message||'')+'</td></tr>';
+  }
+}
+
+function fmt(n){ return (Number(n)||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+async function runBackfillOpeningBalances(){
+  if(!confirm('This posts a real journal entry (debit the account, credit Capital 3000) for any bank/cash account whose opening balance was entered but never posted to the ledger. Accounts already posted are skipped. Continue?')) return;
+  try{
+    const result = await window.Api.post('/bank-accounts/backfill-opening-balances', {});
+    if(result.postedCount === 0){
+      alert('Nothing to backfill — every account\'s opening balance is already posted to the ledger.');
+    }else{
+      const lines = result.posted.map(p=>`${p.accountName}: ${p.jeNo}`).join('\\n');
+      alert(`Posted ${result.postedCount} opening balance ${result.postedCount===1?'entry':'entries'}:\\n\\n${lines}\\n\\nCheck Balance Sheet / Trial Balance — these should now be reflected.`);
+    }
+    loadNetPosition();
+    loadAccounts();
+  }catch(e){
+    alert('Could not post opening balances: ' + (e.message || 'Unknown error'));
+  }
+}
+
+function renderTable(rows){
+  const body = document.getElementById('accountsBody');
+  if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="state-box">No accounts found. Add your first bank account.</td></tr>'; return; }
+  body.innerHTML = rows.map(r=>`<tr>
+    <td><strong>${escapeHtml(r.account_name)}</strong></td>
+    <td>${r.account_type}</td>
+    <td>${r.account_code} — ${escapeHtml(r.ledger_account_name)}</td>
+    <td>₹${fmt(r.opening_balance)}</td>
+    <td>${r.bank_name ? r.bank_name+' / '+(r.account_number||'—') : '—'}</td>
+    <td><span class="badge ${r.is_active===false?'':'success'}">${r.is_active===false?'Inactive':'Active'}</span></td>
+    <td>
+      <a class="btn-secondary" style="display:inline-block;margin-right:6px;text-decoration:none;" href="/bank.html?id=${r.id}" target="_top">📄 View Transactions</a>
+      <button class="btn-secondary" onclick='openEditModal(${JSON.stringify(r).replace(/'/g,"&#39;")})'><i class="fa-solid fa-pen"></i> Edit</button>
+    </td>
+  </tr>`).join('');
+}
+
+function applySearch(){
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderTable(allAccounts.filter(r => !q || r.account_name.toLowerCase().includes(q) || r.account_type.toLowerCase().includes(q)));
+}
+
+function toggleBankFields(){
+  document.getElementById('bankFieldsGroup').style.display = BANK_TYPES.includes(document.getElementById('fAccType').value) ? 'block' : 'none';
+}
+
+async function loadLedgerOptions(selectedCode){
+  const sel = document.getElementById('fLedgerCode');
+  try {
+    const accounts = await window.Api.get('/chart-of-accounts');
+    sel.innerHTML = '<option value="">Select ledger account…</option>' +
+      accounts.map(a=>`<option value="${a.account_code}" ${a.account_code===selectedCode?'selected':''}>${a.account_code} — ${escapeHtml(a.account_name)}</option>`).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Could not load chart of accounts</option>';
+  }
+}
+
+function clearForm(){
+  document.getElementById('editId').value='';
+  document.getElementById('fAccType').value='Cash';
+  document.getElementById('fAccName').value='';
+  document.getElementById('fOpeningBalance').value='0';
+  document.getElementById('fBankName').value='';
+  document.getElementById('fAccountNumber').value='';
+  document.getElementById('fIfsc').value='';
+  document.getElementById('modalMsg').textContent='';
+  toggleBankFields();
+}
+async function openAddModal(){
+  clearForm();
+  document.getElementById('modalTitle').textContent='Add Bank Account';
+  await loadLedgerOptions(null);
+  document.getElementById('accountModal').classList.add('active');
+}
+async function openEditModal(r){
+  clearForm();
+  document.getElementById('modalTitle').textContent='Edit Bank Account';
+  document.getElementById('editId').value=r.id;
+  document.getElementById('fAccType').value=r.account_type;
+  document.getElementById('fAccName').value=r.account_name;
+  document.getElementById('fOpeningBalance').value=r.opening_balance;
+  document.getElementById('fBankName').value=r.bank_name||'';
+  document.getElementById('fAccountNumber').value=r.account_number||'';
+  document.getElementById('fIfsc').value=r.ifsc||'';
+  toggleBankFields();
+  await loadLedgerOptions(r.account_code);
+  document.getElementById('accountModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('accountModal').classList.remove('active'); }
+
+async function saveAccount(){
+  const id = document.getElementById('editId').value;
+  const payload = {
+    accountType: document.getElementById('fAccType').value,
+    accountName: document.getElementById('fAccName').value.trim(),
+    openingBalance: Number(document.getElementById('fOpeningBalance').value)||0,
+    ledgerAccountCode: document.getElementById('fLedgerCode').value,
+    bankName: document.getElementById('fBankName').value.trim()||null,
+    accountNumber: document.getElementById('fAccountNumber').value.trim()||null,
+    ifsc: document.getElementById('fIfsc').value.trim()||null,
+  };
+  if (!payload.accountName) { document.getElementById('modalMsg').textContent='Account name is required.'; return; }
+  if (!payload.ledgerAccountCode) { document.getElementById('modalMsg').textContent='Ledger account is required.'; return; }
+  try {
+    if (id) await window.Api.patch('/bank-accounts/accounts/'+id, payload);
+    else await window.Api.post('/bank-accounts/accounts', payload);
+    closeModal();
+    loadAccounts();
+  } catch(e) {
+    document.getElementById('modalMsg').textContent = 'Failed to save: '+(e.message||'Unknown error');
+  }
+}
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

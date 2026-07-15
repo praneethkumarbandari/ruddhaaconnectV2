@@ -1,0 +1,16 @@
+<!-- Lucky floating assistant. This markup is only ever injected into the
+     page when window.LUCKY_ENABLED === true (see js/shell.js). It does
+     not exist in the DOM at all when the flag is false. -->
+<button class="lucky-btn" id="luckyBtn" title="Lucky — AI Assistant" onclick="window.Lucky && window.Lucky.toggle()">
+  <span class="lucky-icon">✨</span>
+  <span class="lucky-label">Lucky</span>
+</button>
+<div class="lucky-panel" id="luckyPanel">
+  <div class="lucky-panel-header">
+    <span>Lucky Assistant</span>
+    <button onclick="window.Lucky && window.Lucky.toggle()" class="lucky-close" title="Close">✕</button>
+  </div>
+  <div class="lucky-panel-body" id="luckyPanelBody">
+    <p style="color:#888;font-size:13px;padding:16px;">Lucky is getting ready…</p>
+  </div>
+</div>

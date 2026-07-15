@@ -1,0 +1,123 @@
+/* ========================================
+   RUDDHAACONNECT - RESPONSIVE DESIGN
+   ======================================== */
+
+@import url('variables.css');
+
+/* Tablet (768px and below) */
+@media (max-width: 768px) {
+    .field-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .field-row.three {
+        grid-template-columns: 1fr;
+    }
+    
+    .field-row.four {
+        grid-template-columns: 1fr;
+    }
+    
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .grid-3 {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .table-toolbar {
+        flex-direction: column;
+    }
+    
+    .table-search {
+        min-width: auto;
+    }
+}
+
+/* Mobile (480px and below) */
+@media (max-width: 480px) {
+    :root {
+        --sidebar-width: 60px;
+    }
+    
+    .sidebar {
+        width: 60px;
+    }
+    
+    .sidebar-item {
+        padding: 10px 8px;
+        justify-content: center;
+    }
+    
+    .sidebar-item span {
+        display: none;
+    }
+    
+    .sidebar-toggle-btn {
+        display: none;
+    }
+    
+    .main {
+        padding: 16px;
+    }
+    
+    .card {
+        padding: 12px;
+    }
+    
+    .grid-3 {
+        grid-template-columns: 1fr;
+    }
+    
+    .grid-4 {
+        grid-template-columns: 1fr;
+    }
+    
+    .table {
+        font-size: 12px;
+    }
+    
+    .table th,
+    .table td {
+        padding: 6px;
+    }
+    
+    .modal {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .page-header h2 {
+        font-size: 16px;
+    }
+}
+
+/* Large screens (1400px and above) */
+@media (min-width: 1400px) {
+    .main {
+        padding: 32px;
+    }
+    
+    .card {
+        padding: 24px;
+    }
+}

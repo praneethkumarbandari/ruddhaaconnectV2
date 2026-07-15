@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employees</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Employees</h2>
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> Add Employee</button>
+  </div>
+  <!--
+    NOTE: This page now talks to the HR Employee Master API
+    (/api/hr/employees, schema-hr-employee-master.sql) instead of the
+    old plain `employees` login table. Fields below are exactly what
+    that API accepts — see src/lib/employees.ts's createEmployee().
+    Login-account fields (username/password) are handled separately by
+    Accounting's own employee login system and are not part of this
+    form, since HR Employee Master and login credentials are
+    deliberately different concerns in this backend.
+  -->
+  <div class="filter-bar">
+    <input type="text" id="searchInput" placeholder="Search by name or employee code…" oninput="applySearch()">
+    <select id="filterDepartment" onchange="applySearch()"><option value="">All Departments</option></select>
+    <select id="filterStatus" onchange="applySearch()">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+    </select>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Total Employees</h4><div class="s-val" id="cntTotal">—</div></div>
+    <div class="summary-card"><h4>Active</h4><div class="s-val" id="cntActive">—</div></div>
+    <div class="summary-card"><h4>Departments</h4><div class="s-val" id="cntDepts">—</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Employee Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Joining Date</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="empBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="empModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="empModalTitle">Add Employee</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="empModalMsg"></div>
+      <div class="field"><label>Employee Code *</label><input type="text" id="fCode" placeholder="e.g. EMP-1001"></div>
+      <div class="field"><label>Full Name *</label><input type="text" id="fName" placeholder="Full name"></div>
+      <div class="field"><label>Email</label><input type="email" id="fEmail" placeholder="email@company.com"></div>
+      <div class="field"><label>Date of Birth</label><input type="date" id="fDob"></div>
+      <div class="field"><label>Gender</label>
+        <select id="fGender"><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
+      </div>
+      <div class="field"><label>Department</label><select id="fDept"><option value="">—</option></select></div>
+      <div class="field"><label>Designation</label><select id="fDesig"><option value="">—</option></select></div>
+      <div class="field"><label>Branch</label><select id="fBranch"><option value="">—</option></select></div>
+      <div class="field"><label>Employment Type</label><select id="fEmpType"><option value="">—</option></select></div>
+      <div class="field"><label>Reporting Manager</label><select id="fManager"><option value="">—</option></select></div>
+      <div class="field"><label>Joining Date *</label><input type="date" id="fJoining"></div>
+      <div class="field"><label>Remarks</label><textarea id="fRemarks" placeholder="Optional notes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveEmployee()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allEmployees = [], departments = [], designations = [], branches = [], employmentTypes = [], managerOptions = [];
+let editId = null;
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadMasters();
+    loadEmployees();
+});
+
+async function loadMasters(){
+    try {
+        [departments, designations, branches, employmentTypes] = await Promise.all([
+            window.Api.get('/hr/departments'),
+            window.Api.get('/hr/designations'),
+            window.Api.get('/hr/branches'),
+            window.Api.get('/hr/employment-types'),
+        ]);
+        fillSelect('fDept', departments, 'id', 'department_name');
+        fillSelect('fDesig', designations, 'id', 'designation_name');
+        fillSelect('fBranch', branches, 'id', 'branch_name');
+        fillSelect('fEmpType', employmentTypes, 'id', 'employment_type_name');
+        fillSelect('filterDepartment', departments, 'id', 'department_name', true);
+    } catch(e) {
+        console.warn('Could not load HR master data:', e.message);
+    }
+}
+function fillSelect(id, rows, valueKey, labelKey, keepFirst){
+    const sel = document.getElementById(id);
+    const first = keepFirst ? sel.options[0].outerHTML : '<option value="">—</option>';
+    sel.innerHTML = first + (rows||[]).filter(r=>r.is_active!==false).map(r=>`<option value="${r[valueKey]}">${r[labelKey]||''}</option>`).join('');
+}
+
+async function loadEmployees(){
+    try {
+        const result = await window.Api.get('/hr/employees?pageSize=200');
+        allEmployees = result.rows || [];
+        managerOptions = allEmployees;
+        fillSelect('fManager', managerOptions, 'employee_id', 'employee_name');
+        renderTable(allEmployees);
+        updateSummary(allEmployees);
+    } catch(e) {
+        document.getElementById('empBody').innerHTML = '<tr><td colspan="8" class="empty-state">Could not load employees: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function updateSummary(rows){
+    document.getElementById('cntTotal').textContent = rows.length;
+    document.getElementById('cntActive').textContent = rows.filter(r=>r.status==='active').length;
+    document.getElementById('cntDepts').textContent = departments.length || '—';
+}
+function deptName(id){ const d = departments.find(x=>String(x.id)===String(id)); return d ? escapeHtml(d.department_name) : '—'; }
+function desigName(id){ const d = designations.find(x=>String(x.id)===String(id)); return d ? escapeHtml(d.designation_name) : '—'; }
+
+function renderTable(rows){
+    const tbody = document.getElementById('empBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No employees found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(r.employee_code)||'—'}</td>
+        <td><div class="name-cell"><span class="avatar">${(r.employee_name||'?')[0].toUpperCase()}</span>${escapeHtml(r.employee_name)||'—'}</div></td>
+        <td>${deptName(r.department_id)}</td>
+        <td>${desigName(r.designation_id)}</td>
+        <td>${r.joining_date ? String(r.joining_date).split('T')[0] : '—'}</td>
+        <td><span class="badge ${r.status==='active'?'active':'inactive'}">${r.status||'—'}</span></td>
+        <td><button class="action-btn" onclick='editRow(${r.employee_id})'><i class="fa-solid fa-pen"></i> </button></td>
+    </tr>`).join('');
+}
+function applySearch(){
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const dept = document.getElementById('filterDepartment').value;
+    const status = document.getElementById('filterStatus').value;
+    let rows = allEmployees;
+    if(q) rows = rows.filter(r => (r.employee_name||'').toLowerCase().includes(q) || (r.employee_code||'').toLowerCase().includes(q));
+    if(dept) rows = rows.filter(r => String(r.department_id)===dept);
+    if(status) rows = rows.filter(r => r.status===status);
+    renderTable(rows);
+}
+function openAddModal(){
+    editId = null;
+    document.getElementById('empModalTitle').textContent = 'Add Employee';
+    ['fCode','fName','fEmail','fDob','fRemarks'].forEach(id=>document.getElementById(id).value='');
+    ['fGender','fDept','fDesig','fBranch','fEmpType','fManager'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fJoining').value = new Date().toISOString().slice(0,10);
+    document.getElementById('empModalMsg').textContent='';
+    document.getElementById('empModal').classList.add('active');
+}
+function editRow(employeeId){
+    const r = allEmployees.find(x=>String(x.employee_id)===String(employeeId));
+    if(!r) return;
+    editId = employeeId;
+    document.getElementById('empModalTitle').textContent = 'Edit Employee';
+    document.getElementById('fCode').value = r.employee_code||'';
+    document.getElementById('fName').value = r.employee_name||'';
+    document.getElementById('fEmail').value = r.email||'';
+    document.getElementById('fDob').value = r.date_of_birth ? String(r.date_of_birth).split('T')[0] : '';
+    document.getElementById('fGender').value = r.gender||'';
+    document.getElementById('fDept').value = r.department_id||'';
+    document.getElementById('fDesig').value = r.designation_id||'';
+    document.getElementById('fBranch').value = r.branch_id||'';
+    document.getElementById('fEmpType').value = r.employment_type_id||'';
+    document.getElementById('fManager').value = r.reporting_manager_id||'';
+    document.getElementById('fJoining').value = r.joining_date ? String(r.joining_date).split('T')[0] : '';
+    document.getElementById('fRemarks').value = r.remarks||'';
+    document.getElementById('empModalMsg').textContent='';
+    document.getElementById('empModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('empModal').classList.remove('active'); }
+async function saveEmployee(){
+    const payload = {
+        employeeCode: document.getElementById('fCode').value.trim(),
+        employeeName: document.getElementById('fName').value.trim(),
+        email: document.getElementById('fEmail').value.trim() || null,
+        dateOfBirth: document.getElementById('fDob').value || null,
+        gender: document.getElementById('fGender').value || null,
+        departmentId: document.getElementById('fDept').value || null,
+        designationId: document.getElementById('fDesig').value || null,
+        branchId: document.getElementById('fBranch').value || null,
+        employmentTypeId: document.getElementById('fEmpType').value || null,
+        reportingManagerId: document.getElementById('fManager').value || null,
+        joiningDate: document.getElementById('fJoining').value,
+        remarks: document.getElementById('fRemarks').value.trim() || null,
+    };
+    if(!payload.employeeCode || !payload.employeeName || !payload.joiningDate){
+        document.getElementById('empModalMsg').textContent = 'Employee code, name, and joining date are required.';
+        return;
+    }
+    try {
+        if(editId){
+            await window.Api.patch('/hr/employees/'+editId, payload);
+            if(window.Audit) window.Audit.log('hr_employees', editId, 'UPDATE', null, {employeeName: payload.employeeName});
+            closeModal();
+            loadEmployees();
+        } else {
+            // FIX: the backend already generates a real, working login
+            // (bcrypt-hashed password, baseline role assigned) for every
+            // new employee and returns it in this response as
+            // `temporaryPassword` — but this call previously discarded
+            // the response entirely, so that password was generated,
+            // valid, and then permanently unknown to anyone. This was
+            // the actual reason no employee besides the original admin
+            // could ever log in: not a missing backend feature, a
+            // missing "show it to the person who just created it" step.
+            const created = await window.Api.post('/hr/employees', payload);
+            if(window.Audit) window.Audit.log('hr_employees', 'new', 'CREATE', null, {employeeName: payload.employeeName});
+            closeModal();
+            loadEmployees();
+            if (created && created.temporaryPassword) {
+                showCredentialsModal(created.username, created.temporaryPassword);
+            }
+        }
+    } catch(e) {
+        document.getElementById('empModalMsg').textContent = 'Failed to save: '+(e.message||'Unknown error');
+    }
+}
+
+function showCredentialsModal(username, tempPassword){
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-header"><h3>Employee Created — Login Ready</h3></div>
+        <div class="modal-body">
+          <p style="font-size:13px;color:#444;margin-bottom:14px;">Share these credentials with the new employee now. <strong>This password will not be shown again</strong> — if it's lost, it must be reset separately.</p>
+          <div class="field"><label>Username</label><input type="text" readonly value="${username}" onclick="this.select()"></div>
+          <div class="field"><label>Temporary Password</label><input type="text" readonly value="${tempPassword}" onclick="this.select()" style="font-family:monospace;font-weight:700;"></div>
+        </div>
+        <div class="modal-footer"><button class="btn-primary" onclick="this.closest('.modal-overlay').remove()">Done</button></div>
+      </div>`;
+    document.body.appendChild(overlay);
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

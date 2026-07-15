@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendor Ledger</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+body{padding:24px;box-sizing:border-box;background:var(--background-color,#f5f7fb);}
+.page-header{margin-bottom:18px;}
+.report-card{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:20px;}
+.report-title{font-weight:700;font-size:14px;color:#1a2233;}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;}
+th{padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#8a93a6;background:#f7f9fc;border-bottom:1px solid #e2e6ee;}
+td{padding:8px 10px;border-bottom:1px solid #f0f2f6;}
+.debit-col{color:#c0392b;} .credit-col{color:#1a7a3c;}
+.empty-state{text-align:center;padding:30px;color:#aaa;}
+.placeholder-box{background: var(--card-color, #fff); backdrop-filter: blur(var(--card-blur, 16px)); -webkit-backdrop-filter: blur(var(--card-blur, 16px));border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:60px;text-align:center;color:#aaa;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header"><h2>Vendor Ledger</h2></div>
+  <div class="filter-bar">
+    <select id="fVendor" style="min-width:220px;"><option value="">Select vendor…</option></select>
+    <label style="font-size:13px;font-weight:600;color:#555">From:</label>
+    <input type="date" id="fFrom">
+    <label style="font-size:13px;font-weight:600;color:#555">To:</label>
+    <input type="date" id="fTo">
+    <button class="btn-primary" onclick="loadData()">Generate</button>
+  </div>
+  <div id="reportArea"><div class="placeholder-box">Select a vendor and date range, then click Generate.</div></div>
+</div>
+<script>
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+window.addEventListener('DOMContentLoaded',async function(){
+    if (!window.Auth || !window.Auth.isAuthenticated()) { if(window.Auth) window.Auth.checkAuth(); return; }
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('fFrom').value = today.slice(0,8)+'01';
+    document.getElementById('fTo').value = today;
+    try{
+        const vendors = await window.Api.get('/vendors');
+        document.getElementById('fVendor').innerHTML = '<option value="">Select vendor…</option>' + vendors.map(c=>`<option value="${c.id}">${c.vendor_name}</option>`).join('');
+    }catch(e){}
+});
+async function loadData(){
+    const area=document.getElementById('reportArea');
+    const vendorId = document.getElementById('fVendor').value;
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    if(!vendorId){ alert('Please select a vendor.'); return; }
+    if(!from || !to){ alert('Both From and To dates are required.'); return; }
+    area.innerHTML='<div class="placeholder-box">Generating…</div>';
+    try{
+        const ledger = await window.Api.get('/reports/vendor-ledger?vendorId='+encodeURIComponent(vendorId)+'&fromDate='+encodeURIComponent(from)+'&toDate='+encodeURIComponent(to));
+        const rows = (ledger.movements||[]).map(m=>`<tr>
+            <td>${new Date(m.entry_date).toLocaleDateString('en-IN')}</td>
+            <td>${m.je_no}</td>
+            <td>${m.narration||'—'}</td>
+            <td class="debit-col">${Number(m.debit)>0?'₹'+fmt(m.debit):''}</td>
+            <td class="credit-col">${Number(m.credit)>0?'₹'+fmt(m.credit):''}</td>
+            <td>₹${fmt(m.running_balance)}</td>
+        </tr>`).join('');
+        area.innerHTML = `<div class="report-card">
+            <div class="report-title">Opening Balance: ₹${fmt(ledger.openingBalance)}</div>
+            <table><thead><tr><th>Date</th><th>JE No.</th><th>Narration</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+            <tbody>${rows||'<tr><td colspan="6" class="empty-state">No movement in this range.</td></tr>'}</tbody></table>
+            <div class="report-title" style="margin-top:12px;">Closing Balance: ₹${fmt(ledger.closingBalance)}</div>
+        </div>`;
+    }catch(e){
+        area.innerHTML='<div class="placeholder-box" style="color:#c0392b;">Could not generate ledger: '+(e.message||'Unknown error')+'</div>';
+    }
+}
+function logout(){ window.Auth.logout(); }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+</body>
+</html>

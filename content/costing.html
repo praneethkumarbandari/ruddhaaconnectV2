@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Costing</title>
+<script>(function(){try{var t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Costing</h2>
+    <button class="btn-primary" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> New Cost Sheet</button>
+  </div>
+  <!--
+    NOTE: No backend route exists for Costing yet (confirmed by
+    reading src/routes — no costing.ts anywhere). This page follows
+    the same direct-Supabase pattern already used by Inventory and
+    Bank & Cash (content/inventory.html, content/bank.html) rather
+    than inventing a new architectural approach: a `costing_records`
+    table, read/written directly via window.db, exactly like those
+    pages already do for `inventory` / `bank_accounts`. This is ready
+    to be swapped for a real /api/costing/* backend later without
+    changing the page's shape — only loadCostSheets()/saveCostSheet()
+    would need to change from db.from(...) calls to window.Api calls.
+  -->
+  <div class="filter-bar">
+    <input type="text" id="searchInput" placeholder="Search by cost sheet name…" oninput="applySearch()">
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Cost Sheets</h4><div class="s-val" id="cntTotal">—</div></div>
+    <div class="summary-card"><h4>Total Material Cost</h4><div class="s-val" id="cntMaterial">—</div></div>
+    <div class="summary-card"><h4>Total Estimated Cost</h4><div class="s-val" id="cntTotalCost">—</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Cost Sheet</th><th>Linked Item</th><th>Linked Project</th><th>Material</th><th>Labour</th><th>Overhead</th><th>Total Cost</th><th>Actions</th></tr></thead>
+      <tbody id="costingBody"><tr><td colspan="9" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="costingModal">
+  <div class="modal">
+    <div class="modal-header"><h3 id="costingModalTitle">New Cost Sheet</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="costingModalMsg"></div>
+      <div class="field"><label>Cost Sheet Name *</label><input type="text" id="fName" placeholder="e.g. Widget A – Q3 batch"></div>
+      <div class="field"><label>Linked Inventory Item</label><select id="fItem"><option value="">—</option></select></div>
+      <div class="field"><label>Linked Project</label><select id="fProject"><option value="">—</option></select></div>
+      <div class="field"><label>Material Cost</label><input type="number" step="0.01" id="fMaterial" placeholder="0.00" oninput="recalcTotal()"></div>
+      <div class="field"><label>Labour Cost</label><input type="number" step="0.01" id="fLabour" placeholder="0.00" oninput="recalcTotal()"></div>
+      <div class="field"><label>Overhead Cost</label><input type="number" step="0.01" id="fOverhead" placeholder="0.00" oninput="recalcTotal()"></div>
+      <div class="field"><label>Total Estimated Cost</label><input type="text" id="fTotal" readonly style="background:#f5f7fb;font-weight:600;"></div>
+      <div class="field"><label>Notes</label><textarea id="fNotes" placeholder="Optional notes"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveCostSheet()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allSheets = [], inventoryItems = [], projects = [], editId = null;
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth || !window.Auth.isAuthenticated()) {
+        const stored = localStorage.getItem('loggedEmployee');
+        if (!stored) { window.top.location.href = '/business-login.html'; return; }
+    }
+    const emp = window.Auth ? window.Auth.getEmployee() : JSON.parse(localStorage.getItem('loggedEmployee')||'null');
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||emp.name||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    await loadLookups();
+    await loadCostSheets();
+});
+
+async function loadLookups(){
+    try {
+        const { items } = await window.Api.get('/inventory');
+        inventoryItems = items || [];
+        document.getElementById('fItem').innerHTML = '<option value="">—</option>' +
+            inventoryItems.map(i=>`<option value="${i.code}">${i.code} — ${i.name}</option>`).join('');
+    } catch(e) { console.warn('Could not load inventory items:', e.message); }
+
+    try {
+        projects = await window.Api.get('/projects');
+        document.getElementById('fProject').innerHTML = '<option value="">—</option>' +
+            (projects||[]).map(p=>`<option value="${p.id}">${p.project_code||p.id} — ${p.project_name||p.name}</option>`).join('');
+    } catch(e) { console.warn('Could not load projects:', e.message); }
+}
+function itemLabel(code){ const i = inventoryItems.find(x=>x.code===code); return i ? i.name : '—'; }
+function projectLabel(id){ const p = projects.find(x=>String(x.id)===String(id)); return p ? (p.project_name||p.name) : '—'; }
+
+async function loadCostSheets(){
+    try {
+        const data = await window.Api.get('/costing');
+        allSheets = data || [];
+        renderTable(allSheets);
+        updateSummary(allSheets);
+    } catch(e) {
+        document.getElementById('costingBody').innerHTML = '<tr><td colspan="9" class="empty-state">Could not load cost sheets: '+(e.message||'Unknown error')+'</td></tr>';
+        updateSummary([]);
+    }
+}
+function updateSummary(rows){
+    document.getElementById('cntTotal').textContent = rows.length;
+    document.getElementById('cntMaterial').textContent = rows.reduce((s,r)=>s+Number(r.material_cost||0),0).toFixed(2);
+    document.getElementById('cntTotalCost').textContent = rows.reduce((s,r)=>s+Number(r.total_cost||0),0).toFixed(2);
+}
+function renderTable(rows){
+    const tbody = document.getElementById('costingBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No cost sheets found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(r.sheet_name)||'—'}</td>
+        <td>${r.item_code ? (r.item_code+' — '+itemLabel(r.item_code)) : '—'}</td>
+        <td>${r.project_id ? projectLabel(r.project_id) : '—'}</td>
+        <td>${Number(r.material_cost||0).toFixed(2)}</td>
+        <td>${Number(r.labour_cost||0).toFixed(2)}</td>
+        <td>${Number(r.overhead_cost||0).toFixed(2)}</td>
+        <td><strong>${Number(r.total_cost||0).toFixed(2)}</strong></td>
+        <td><button class="action-btn" onclick='editRow(${JSON.stringify(r).replace(/'/g,"&#39;")})'><i class="fa-solid fa-pen"></i> </button></td>
+    </tr>`).join('');
+}
+function applySearch(){
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    renderTable(allSheets.filter(r => !q || (r.sheet_name||'').toLowerCase().includes(q)));
+}
+function recalcTotal(){
+    const m = Number(document.getElementById('fMaterial').value||0);
+    const l = Number(document.getElementById('fLabour').value||0);
+    const o = Number(document.getElementById('fOverhead').value||0);
+    document.getElementById('fTotal').value = (m+l+o).toFixed(2);
+}
+function openAddModal(){
+    editId = null;
+    document.getElementById('costingModalTitle').textContent = 'New Cost Sheet';
+    ['fName','fMaterial','fLabour','fOverhead','fNotes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fItem').value = '';
+    document.getElementById('fProject').value = '';
+    document.getElementById('fTotal').value = '0.00';
+    document.getElementById('costingModalMsg').textContent = '';
+    document.getElementById('costingModal').classList.add('active');
+}
+function editRow(r){
+    editId = r.id;
+    document.getElementById('costingModalTitle').textContent = 'Edit Cost Sheet';
+    document.getElementById('fName').value = r.sheet_name||'';
+    document.getElementById('fItem').value = r.item_code||'';
+    document.getElementById('fProject').value = r.project_id||'';
+    document.getElementById('fMaterial').value = r.material_cost||'';
+    document.getElementById('fLabour').value = r.labour_cost||'';
+    document.getElementById('fOverhead').value = r.overhead_cost||'';
+    document.getElementById('fNotes').value = r.notes||'';
+    recalcTotal();
+    document.getElementById('costingModalMsg').textContent = '';
+    document.getElementById('costingModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('costingModal').classList.remove('active'); }
+async function saveCostSheet(){
+    const material = Number(document.getElementById('fMaterial').value||0);
+    const labour = Number(document.getElementById('fLabour').value||0);
+    const overhead = Number(document.getElementById('fOverhead').value||0);
+    const payload = {
+        sheetName: document.getElementById('fName').value.trim(),
+        itemCode: document.getElementById('fItem').value || null,
+        projectId: document.getElementById('fProject').value || null,
+        materialCost: material,
+        labourCost: labour,
+        overheadCost: overhead,
+        notes: document.getElementById('fNotes').value.trim() || null,
+    };
+    if(!payload.sheetName){
+        document.getElementById('costingModalMsg').textContent = 'Cost sheet name is required.';
+        return;
+    }
+    try {
+        if(editId){ await window.Api.patch('/costing/' + editId, payload); }
+        else { await window.Api.post('/costing', payload); }
+        if(window.Audit) window.Audit.log('costing_records', editId||'new', editId?'UPDATE':'CREATE', null, {sheet_name: payload.sheetName});
+        closeModal();
+        loadCostSheets();
+    } catch(e) {
+        document.getElementById('costingModalMsg').textContent = 'Could not save: '+(e.message||'Unknown error.');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){ if(window.Auth) window.Auth.logout(); else { localStorage.removeItem('loggedEmployee'); window.top.location.href='/business-login.html'; } }
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

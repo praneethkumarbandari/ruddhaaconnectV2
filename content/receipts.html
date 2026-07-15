@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipts</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Receipts</h2>
+        <button class="btn-primary" onclick="openReceiptModal()">＋ New Receipt</button>
+    </div>
+    <!--
+      NOTE: this page did not exist anywhere in the original shell.
+      Built new. IMPORTANT: this page does not compute or display a
+      remaining-outstanding-per-invoice figure client-side — that
+      calculation belongs to the backend alone (which validates every
+      allocation against the invoice's actual remaining balance; see
+      Patch 1, Defect 2). The invoice picker below shows each posted
+      invoice's real total only; if an allocation would exceed what's
+      actually still owed, the backend rejects it with a specific
+      error message naming the real remaining amount, which is
+      surfaced here rather than guessed at.
+    -->
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Receipt No.</th><th>Date</th><th>Customer</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="receiptModal">
+  <div class="modal" style="max-width:750px;">
+    <div class="modal-header"><h3>New Receipt</h3><button class="modal-header-close" onclick="document.getElementById('receiptModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="modalMsg"></div>
+      <div class="field-row">
+        <div class="field"><label>Customer *</label><select id="fCustomer" onchange="onCustomerChange()"><option value="">Select customer…</option></select></div>
+        <div class="field"><label>Receipt Date *</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Amount Received *</label><input type="number" id="fAmount" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>Deposited To *</label><select id="fBankAccount"><option value="">Select account…</option></select></div>
+      </div>
+      <div class="field"><label>Narration</label><input type="text" id="fNarration" placeholder="Optional note"></div>
+
+      <div style="margin-top:14px;">
+        <label style="font-weight:600;font-size:13px;">Allocate to Invoices</label>
+        <table style="margin-top:6px;">
+          <thead><tr><th>Invoice</th><th>Invoice Total</th><th>Allocated Amount</th><th></th></tr></thead>
+          <tbody id="allocBody"></tbody>
+        </table>
+        <button class="btn-secondary" onclick="addAllocLine()" style="margin-top:8px;">+ Add Allocation</button>
+        <p style="font-size:12px;color:#888;margin-top:6px;">Select a customer first to see their posted invoices. Allocations are validated by the server against each invoice's actual remaining balance — over-allocating will be rejected with the real figure.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="saveReceipt(false)">Save as Draft</button>
+      <button class="btn-primary" onclick="saveReceipt(true)">Save &amp; Post</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allRows=[], custInvoices=[], allocations=[{salesInvoiceId:'',allocatedAmount:0}];
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadReceipts();
+});
+
+async function loadReceipts(){
+    try{
+        allRows = await window.Api.get('/receipts');
+        renderTable(allRows);
+    }catch(e){
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="6" class="empty-state">Could not load receipts: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function renderTable(rows){
+    const tbody = document.getElementById('tableBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No receipts found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td>${r.receipt_no||'(draft)'}</td>
+        <td>${r.receipt_date?new Date(r.receipt_date).toLocaleDateString('en-IN'):'—'}</td>
+        <td>${escapeHtml(r.customer_name)||('#'+r.customer_id)}</td>
+        <td>₹${fmt(r.amount)}</td>
+        <td><span class="badge ${r.status}">${r.status}</span></td>
+        <td>${r.status==='draft'?`<button class="action-btn" onclick="postReceipt('${r.id}')"><i class="fa-solid fa-check"></i> Post</button>`:(r.status==='posted'?`<button class="action-btn" onclick="cancelReceipt('${r.id}')"><i class="fa-solid fa-xmark"></i> Cancel</button>`:'—')} <button class="action-btn" onclick="downloadReceiptPdf('${r.id}','${r.receipt_no||r.id}')"><i class="fa-solid fa-download"></i> PDF</button></td>
+    </tr>`).join('');
+}
+async function downloadReceiptPdf(id, docNo){
+    try{ await window.Api.downloadFile('/receipts/'+id+'/pdf', 'receipt-'+docNo+'.pdf'); }
+    catch(e){ alert('Could not download PDF: '+(e.message||'Unknown error')); }
+}
+async function postReceipt(id){
+    if(!confirm('Post this receipt?')) return;
+    try{ await window.Api.post('/receipts/'+id+'/post'); loadReceipts(); }
+    catch(e){ alert('Could not post: '+(e.message||'Unknown error')); }
+}
+async function cancelReceipt(id){
+    const reason = prompt('Reason for cancelling this receipt:');
+    if(reason===null) return;
+    if(!reason.trim()){ alert('A reason is required.'); return; }
+    try{ await window.Api.post('/receipts/'+id+'/cancel', { reason: reason.trim() }); loadReceipts(); }
+    catch(e){ alert('Could not cancel: '+(e.message||'Unknown error')); }
+}
+
+async function openReceiptModal(){
+    document.getElementById('fDate').valueAsDate = new Date();
+    document.getElementById('fAmount').value = '';
+    document.getElementById('fNarration').value = '';
+    document.getElementById('modalMsg').textContent = '';
+    allocations = [{salesInvoiceId:'',allocatedAmount:0}];
+    custInvoices = [];
+    try{
+        const customers = await window.Api.get('/customers');
+        document.getElementById('fCustomer').innerHTML = '<option value="">Select customer…</option>' + customers.filter(c=>c.is_active!==false).map(c=>`<option value="${c.id}">${escapeHtml(c.customer_name)}</option>`).join('');
+    }catch(e){}
+    try{
+        // FIX: same bug as payments.html — was querying Chart of
+        // Accounts control-account names instead of your actual named
+        // bank accounts. Now uses the real bank_accounts table.
+        const bankAccounts = await window.Api.get('/bank-accounts/accounts');
+        document.getElementById('fBankAccount').innerHTML = '<option value="">Select account…</option>' + bankAccounts.map(a=>`<option value="${a.account_code}">${escapeHtml(a.account_name)}${a.bank_name?' ('+escapeHtml(a.bank_name)+(a.account_number?' — '+escapeHtml(a.account_number.slice(-4)):'')+')':''}</option>`).join('');
+    }catch(e){}
+    renderAllocations();
+    document.getElementById('receiptModal').classList.add('active');
+}
+async function onCustomerChange(){
+    const customerId = document.getElementById('fCustomer').value;
+    custInvoices = [];
+    if(customerId){
+        try{
+            const all = await window.Api.get('/sales-invoices?status=posted');
+            custInvoices = all.filter(i => String(i.customer_id) === String(customerId));
+        }catch(e){}
+    }
+    allocations = [{salesInvoiceId:'',allocatedAmount:0}];
+    renderAllocations();
+}
+function renderAllocations(){
+    document.getElementById('allocBody').innerHTML = allocations.map((a,i)=>`<tr>
+        <td><select data-idx="${i}" data-field="salesInvoiceId" style="width:100%;padding:6px;">
+            <option value="">Select invoice…</option>
+            ${custInvoices.map(inv=>`<option value="${inv.id}" ${String(a.salesInvoiceId)===String(inv.id)?'selected':''}>${inv.invoice_no} — ₹${fmt(inv.total)}</option>`).join('')}
+        </select></td>
+        <td>${(()=>{const inv=custInvoices.find(x=>String(x.id)===String(a.salesInvoiceId));return inv?'₹'+fmt(inv.total):'—';})()}</td>
+        <td><input type="number" min="0" step="0.01" value="${a.allocatedAmount||''}" data-idx="${i}" data-field="allocatedAmount" style="width:100%;padding:6px;"></td>
+        <td><button data-remove="${i}" style="background:none;border:0;color:#c0392b;cursor:pointer;"><i class="fa-solid fa-trash"></i> </button></td>
+    </tr>`).join('');
+}
+document.addEventListener('change', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    if(idx===null) return;
+    if(e.target.getAttribute('data-field')==='salesInvoiceId'){ allocations[idx].salesInvoiceId = e.target.value; renderAllocations(); }
+});
+document.addEventListener('input', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    if(idx===null) return;
+    if(e.target.getAttribute('data-field')==='allocatedAmount'){ allocations[idx].allocatedAmount = parseFloat(e.target.value)||0; }
+});
+document.addEventListener('click', function(e){
+    const removeIdx = e.target.getAttribute('data-remove');
+    if(removeIdx!==null && document.getElementById('receiptModal').classList.contains('active')){ allocations.splice(parseInt(removeIdx),1); renderAllocations(); }
+});
+function addAllocLine(){ allocations.push({salesInvoiceId:'',allocatedAmount:0}); renderAllocations(); }
+
+async function saveReceipt(postImmediately){
+    const customerId = document.getElementById('fCustomer').value;
+    const receiptDate = document.getElementById('fDate').value;
+    const amount = parseFloat(document.getElementById('fAmount').value)||0;
+    const bankAccountCode = document.getElementById('fBankAccount').value;
+    const narration = document.getElementById('fNarration').value.trim();
+    const msg = document.getElementById('modalMsg');
+    if(!customerId){ msg.textContent='Please select a customer.'; return; }
+    if(!receiptDate){ msg.textContent='Receipt date is required.'; return; }
+    if(!amount || amount<=0){ msg.textContent='Amount must be greater than zero.'; return; }
+    if(!bankAccountCode){ msg.textContent='Please select where this was deposited.'; return; }
+    const validAllocs = allocations.filter(a=>a.salesInvoiceId && a.allocatedAmount>0);
+    try{
+        const receipt = await window.Api.post('/receipts', {
+            customerId: Number(customerId), receiptDate, amount, bankAccountCode,
+            allocations: validAllocs.map(a=>({ salesInvoiceId: Number(a.salesInvoiceId), allocatedAmount: a.allocatedAmount })),
+            narration: narration || undefined,
+        });
+        if(postImmediately){
+            await window.Api.post('/receipts/'+receipt.id+'/post');
+            alert('Receipt '+(receipt.receipt_no||receipt.id)+' created and posted.');
+        } else {
+            alert('Receipt saved as draft.');
+        }
+        document.getElementById('receiptModal').classList.remove('active');
+        loadReceipts();
+    }catch(e){
+        // This is where the real backend validation surfaces — e.g. an
+        // over-allocation attempt returns the invoice's actual remaining
+        // balance in the error message (Patch 1, Defect 2 fix).
+        msg.textContent = 'Could not save receipt: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

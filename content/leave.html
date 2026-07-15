@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leave</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/tables.css">
+<link rel="stylesheet" href="/css/modals.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<link rel="stylesheet" href="/css/responsive.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab-btn { padding: 8px 16px; border: 1px solid #dbe1ea; border-radius: 6px; background: #fff; cursor: pointer; }
+  .tab-btn.active { background: var(--primary-color, #4a6cf7); color: #fff; border-color: transparent; }
+</style>
+</head>
+<body>
+<div class="main" id="mainContent">
+  <div class="page-header">
+    <h2>Leave</h2>
+    <button class="btn-primary" onclick="openApplyModal()"><i class="fa-solid fa-plus"></i> Apply for Leave</button>
+  </div>
+  <!--
+    NOTE: New page — wired to the Leave Management API
+    (/api/leave/requests, /api/leave/balances, /api/hr/leave-types,
+    schema-leave.sql). "My Requests" shows the logged-in employee's
+    own applications; "All Requests" (HR-wide view) and pending
+    approvals are shown to whoever the backend's own leave.view /
+    leave.approve permissions allow — a user without those permissions
+    simply sees an empty result for that tab rather than an error.
+  -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tabMy" onclick="switchTab('my')">My Requests</button>
+    <button class="tab-btn" id="tabApprovals" onclick="switchTab('approvals')">Pending Approvals</button>
+    <button class="tab-btn" id="tabAll" onclick="switchTab('all')">All Requests (HR)</button>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card"><h4>Shown</h4><div class="s-val" id="cntTotal">—</div></div>
+    <div class="summary-card"><h4>Pending</h4><div class="s-val" id="cntPending">—</div></div>
+    <div class="summary-card"><h4>Approved</h4><div class="s-val" id="cntApproved">—</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr id="leaveHead"><th>#</th><th>Employee</th><th>Leave Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="leaveBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="leaveModal">
+  <div class="modal">
+    <div class="modal-header"><h3>Apply for Leave</h3><button class="modal-header-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="leaveModalMsg"></div>
+      <div class="field"><label>Leave Type *</label><select id="fLeaveType"><option value="">Select…</option></select></div>
+      <div class="field"><label>From Date *</label><input type="date" id="fFrom"></div>
+      <div class="field"><label>To Date *</label><input type="date" id="fTo"></div>
+      <div class="field"><label><input type="checkbox" id="fHalfDay" onchange="toggleHalfDay()"> Half Day</label></div>
+      <div class="field" id="halfDaySessionField" style="display:none;">
+        <label>Session</label>
+        <select id="fHalfDaySession"><option value="first_half">First Half</option><option value="second_half">Second Half</option></select>
+      </div>
+      <div class="field"><label>Reason *</label><textarea id="fReason" placeholder="Reason for leave"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="applyLeave()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentTab = 'my', leaveTypes = [], currentRows = [];
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadLeaveTypes();
+    loadTab();
+});
+
+async function loadLeaveTypes(){
+    try {
+        leaveTypes = await window.Api.get('/hr/leave-types');
+        document.getElementById('fLeaveType').innerHTML = '<option value="">Select…</option>' +
+            leaveTypes.filter(t=>t.is_active!==false).map(t=>`<option value="${t.id}">${escapeHtml(t.leave_type_name)}</option>`).join('');
+    } catch(e) {
+        console.warn('Could not load leave types:', e.message);
+    }
+}
+function leaveTypeName(id){ const t = leaveTypes.find(x=>String(x.id)===String(id)); return t ? t.leave_type_name : '—'; }
+
+function switchTab(tab){
+    currentTab = tab;
+    ['tabMy','tabApprovals','tabAll'].forEach(id=>document.getElementById(id).classList.remove('active'));
+    document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active');
+    loadTab();
+}
+async function loadTab(){
+    document.getElementById('leaveBody').innerHTML = '<tr><td colspan="8" class="empty-state">Loading…</td></tr>';
+    try {
+        let rows;
+        if(currentTab === 'my') rows = await window.Api.get('/leave/requests/my');
+        else if(currentTab === 'approvals') rows = await window.Api.get('/leave/requests/my/pending-approvals');
+        else rows = await window.Api.get('/leave/requests');
+        currentRows = rows || [];
+        renderTable(currentRows);
+        updateSummary(currentRows);
+    } catch(e) {
+        document.getElementById('leaveBody').innerHTML = '<tr><td colspan="8" class="empty-state">Could not load leave requests: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function updateSummary(rows){
+    document.getElementById('cntTotal').textContent = rows.length;
+    document.getElementById('cntPending').textContent = rows.filter(r=>r.status==='pending').length;
+    document.getElementById('cntApproved').textContent = rows.filter(r=>r.status==='approved').length;
+}
+function daysBetween(from, to){
+    if(!from||!to) return '—';
+    const d = (new Date(to) - new Date(from)) / 86400000 + 1;
+    return d>0 ? d : '—';
+}
+function renderTable(rows){
+    const tbody = document.getElementById('leaveBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No leave requests found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td>${escapeHtml(r.employee_name)||('#'+r.employee_id)}</td>
+        <td>${escapeHtml(r.leave_type_name)||leaveTypeName(r.leave_type_id)}</td>
+        <td>${r.from_date?String(r.from_date).split('T')[0]:'—'}</td>
+        <td>${r.to_date?String(r.to_date).split('T')[0]:'—'}</td>
+        <td>${daysBetween(r.from_date, r.to_date)}</td>
+        <td><span class="badge ${r.status==='approved'?'active':(r.status==='rejected'?'inactive':'')}">${r.status||'—'}</span></td>
+        <td>
+            ${(currentTab==='my' && r.status==='pending') ? '<button class="action-btn" onclick="cancelLeave('+r.id+')" title="Cancel"><i class="fa-solid fa-trash"></i> </button>' : ''}
+            ${(currentTab==='approvals' && r.status==='pending') ? '<button class="action-btn" onclick="approveLeave('+r.id+')" title="Approve"><i class="fa-solid fa-check"></i> </button><button class="action-btn" onclick="rejectLeave('+r.id+')" title="Reject"><i class="fa-solid fa-xmark"></i> </button>' : ''}
+        </td>
+    </tr>`).join('');
+}
+function toggleHalfDay(){
+    document.getElementById('halfDaySessionField').style.display = document.getElementById('fHalfDay').checked ? 'block' : 'none';
+}
+function openApplyModal(){
+    document.getElementById('fLeaveType').value = '';
+    document.getElementById('fFrom').value = '';
+    document.getElementById('fTo').value = '';
+    document.getElementById('fHalfDay').checked = false;
+    document.getElementById('halfDaySessionField').style.display = 'none';
+    document.getElementById('fReason').value = '';
+    document.getElementById('leaveModalMsg').textContent = '';
+    document.getElementById('leaveModal').classList.add('active');
+}
+function closeModal(){ document.getElementById('leaveModal').classList.remove('active'); }
+async function applyLeave(){
+    const payload = {
+        leaveTypeId: document.getElementById('fLeaveType').value,
+        fromDate: document.getElementById('fFrom').value,
+        toDate: document.getElementById('fTo').value,
+        isHalfDay: document.getElementById('fHalfDay').checked,
+        halfDaySession: document.getElementById('fHalfDay').checked ? document.getElementById('fHalfDaySession').value : null,
+        reason: document.getElementById('fReason').value.trim(),
+    };
+    if(!payload.leaveTypeId || !payload.fromDate || !payload.toDate || !payload.reason){
+        document.getElementById('leaveModalMsg').textContent = 'Leave type, dates, and reason are required.';
+        return;
+    }
+    try {
+        await window.Api.post('/leave/requests', payload);
+        if(window.Audit) window.Audit.log('leave_requests', 'new', 'CREATE', null, payload);
+        closeModal();
+        switchTab('my');
+    } catch(e) {
+        document.getElementById('leaveModalMsg').textContent = 'Could not submit: '+(e.message||'Unknown error');
+    }
+}
+async function cancelLeave(id){
+    const reason = prompt('Reason for cancelling this request?');
+    if(!reason) return;
+    try {
+        await window.Api.post('/leave/requests/'+id+'/cancel', { cancellationReason: reason });
+        if(window.Audit) window.Audit.log('leave_requests', id, 'CANCEL', null, {reason});
+        loadTab();
+    } catch(e) { alert('Could not cancel: '+(e.message||'Unknown error')); }
+}
+async function approveLeave(id){
+    if(!confirm('Approve this leave request?')) return;
+    try {
+        await window.Api.post('/leave/requests/'+id+'/approve', {});
+        if(window.Audit) window.Audit.log('leave_requests', id, 'APPROVE', null, null);
+        loadTab();
+    } catch(e) { alert('Could not approve: '+(e.message||'Unknown error')); }
+}
+async function rejectLeave(id){
+    const notes = prompt('Reason for rejecting (optional)?') || null;
+    try {
+        await window.Api.post('/leave/requests/'+id+'/reject', { decisionNotes: notes });
+        if(window.Audit) window.Audit.log('leave_requests', id, 'REJECT', null, {notes});
+        loadTab();
+    } catch(e) { alert('Could not reject: '+(e.message||'Unknown error')); }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/audit.js"></script>
+</body>
+</html>

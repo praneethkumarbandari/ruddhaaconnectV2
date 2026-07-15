@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Templates</title>
+<script>
+(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');
+  if(t.primary_color)    document.documentElement.style.setProperty('--primary-color',t.primary_color);
+  if(t.secondary_color)  document.documentElement.style.setProperty('--secondary-color',t.secondary_color);
+  if(t.background_color) document.documentElement.style.setProperty('--background-color',t.background_color);
+  if(t.font_family)      document.documentElement.style.setProperty('--font-family',t.font_family);
+}catch(e){}}());
+</script>
+<script src="/js/theme-boot.js"></script>
+<link rel="stylesheet" href="/css/variables.css">
+<link rel="stylesheet" href="/css/global.css">
+<link rel="stylesheet" href="/css/layout.css">
+<link rel="stylesheet" href="/css/cards.css">
+<link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/css/utilities.css">
+<style>
+  body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }
+  .template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-top: 20px; }
+  .template-card { background: var(--card-color, #fff); border: 2px solid #eee; border-radius: 12px; padding: 20px; cursor: pointer; transition: border-color .15s; }
+  .template-card.selected { border-color: var(--primary-color, #1f6bff); }
+  .template-card:hover { border-color: var(--secondary-color, #b9c8ff); }
+  .template-preview { height: 160px; border-radius: 8px; background: #fafafa; border: 1px solid #eee; margin-bottom: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .template-preview .line { height: 6px; background: #e2e6ee; border-radius: 3px; }
+  .template-card h4 { margin: 0 0 4px 0; font-size: 15px; }
+  .template-card p { margin: 0; font-size: 12px; color: #888; }
+  .template-card .badge { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 700; color: var(--primary-color, #1f6bff); text-transform: uppercase; }
+  #saveMsg, #errMsg { display: none; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 16px; }
+  #saveMsg.show { display: block; background: #e6f7ec; color: #1c7a3c; }
+  #errMsg.show { display: block; background: #fdecec; color: #c0392b; }
+</style>
+</head>
+<body>
+
+  <div class="page-header">
+    <h2>Document Templates</h2>
+    <p style="color:#888;font-size:13px;">Choose the print/PDF layout used for Invoices, Receipts, and Payments. Every style shows the exact same data — this only changes the visual layout, never what information appears.</p>
+  </div>
+
+  <div class="template-grid" id="templateGrid">
+    <!-- populated by JS -->
+  </div>
+
+  <div style="margin-top:20px;">
+    <button class="btn-primary" id="saveBtn" onclick="saveTemplate()">Save</button>
+  </div>
+  <div id="saveMsg">✅ Template saved.</div>
+  <div id="errMsg"></div>
+
+<script>
+const STYLES = [
+  { code: 'classic', name: 'Classic', desc: 'Traditional bordered layout with a bold header band — closest to a conventional printed invoice.' },
+  { code: 'modern',  name: 'Modern',  desc: 'Clean, minimal borders with a colored accent bar — a contemporary, lighter look.' },
+  { code: 'minimal', name: 'Minimal', desc: 'The least ink on the page: no borders or fills, just clear typographic hierarchy.' },
+];
+let selected = 'classic';
+
+function renderGrid(){
+  document.getElementById('templateGrid').innerHTML = STYLES.map(s => `
+    <div class="template-card ${s.code === selected ? 'selected' : ''}" onclick="selectTemplate('${s.code}')">
+      <div class="template-preview">
+        <div class="line" style="width:60%;height:10px;"></div>
+        <div class="line" style="width:40%;"></div>
+        <div class="line" style="width:90%;margin-top:10px;"></div>
+        <div class="line" style="width:80%;"></div>
+        <div class="line" style="width:85%;"></div>
+        <div class="line" style="width:50%;margin-top:10px;"></div>
+      </div>
+      <h4>${s.name}</h4>
+      <p>${s.desc}</p>
+      ${s.code === selected ? '<span class="badge">✓ Selected</span>' : ''}
+    </div>
+  `).join('');
+}
+function selectTemplate(code){ selected = code; renderGrid(); }
+
+async function loadCurrent(){
+  try{
+    const data = await window.Api.get('/settings');
+    if(data && data.pdf_template_style) selected = data.pdf_template_style;
+  }catch(e){ /* default to 'classic' if this employee can't view settings */ }
+  renderGrid();
+}
+
+async function saveTemplate(){
+  const btn = document.getElementById('saveBtn'), sMsg = document.getElementById('saveMsg'), eMsg = document.getElementById('errMsg');
+  sMsg.classList.remove('show'); eMsg.classList.remove('show');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    await window.Api.patch('/settings', { pdf_template_style: selected });
+    sMsg.classList.add('show');
+  }catch(e){
+    eMsg.textContent = 'Could not save: ' + (e.message || 'unknown error');
+    eMsg.classList.add('show');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+loadCurrent();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/module-access.js"></script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Purchase Invoice</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header"><h2>New Purchase Invoice</h2></div>
+    <!--
+      NOTE: the original version of this page supported both Sales and
+      Purchase invoices (via a docType toggle), inventory item lookup,
+      and templates — none of which Accounting V1 has (it has separate
+      sales-invoice and purchase-invoice endpoints, no inventory
+      linkage, no templates). This page is Purchase Invoices only, with
+      plain description/qty/rate/gstRate lines, matching
+      src/lib/purchases.ts exactly.
+    -->
+    <div class="content-box" style="background:#fff;border-radius:10px;padding:20px;">
+      <div class="field-row">
+        <div class="field"><label>Vendor *</label>
+          <select id="fVendor"><option value="">Select vendor…</option></select>
+        </div>
+        <div class="field"><label>Invoice Date *</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Vendor Invoice No.</label><input type="text" id="fVendorInvoiceNo" placeholder="Vendor's own invoice number"></div>
+      </div>
+      <div class="field"><label>Narration</label><input type="text" id="fNarration" placeholder="Optional note"></div>
+
+      <table style="margin-top:16px;">
+        <thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>GST %</th><th>Line Total</th><th></th></tr></thead>
+        <tbody id="linesBody"></tbody>
+      </table>
+      <button class="btn-secondary" onclick="addLine()" style="margin-top:8px;">+ Add Line</button>
+
+      <div style="text-align:right;margin-top:16px;font-size:14px;">
+        <div>Subtotal: ₹<span id="sumSubtotal">0.00</span></div>
+        <div>GST: ₹<span id="sumGst">0.00</span></div>
+        <div style="font-weight:700;font-size:16px;">Total: ₹<span id="sumTotal">0.00</span></div>
+      </div>
+
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="window.location.href='purchase-invoices.html'">Cancel</button>
+        <button class="btn-secondary" onclick="saveInvoice(false)">Save as Draft</button>
+        <button class="btn-primary" onclick="saveInvoice(true)">Save &amp; Post</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let lines = [{description:'',qty:1,rate:0,gstRate:18}];
+
+window.addEventListener('DOMContentLoaded', async function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    document.getElementById('fDate').valueAsDate = new Date();
+    setupSidebar();
+    try{
+        const vendors = await window.Api.get('/vendors');
+        const sel = document.getElementById('fVendor');
+        sel.innerHTML = '<option value="">Select vendor…</option>' + vendors.filter(c=>c.is_active!==false).map(c=>`<option value="${c.id}">${c.vendor_name}${c.supply_type==='interstate'?' (Interstate)':''}</option>`).join('');
+    }catch(e){}
+    renderLines();
+});
+
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function renderLines(){
+    document.getElementById('linesBody').innerHTML = lines.map((l,i)=>{
+        const lineTotal = (l.qty||0)*(l.rate||0);
+        const gstAmt = lineTotal*((l.gstRate||0)/100);
+        return `<tr>
+            <td><input type="text" value="${l.description||''}" data-idx="${i}" data-field="description" style="width:100%;padding:6px;"></td>
+            <td><input type="number" value="${l.qty||''}" min="0" step="0.01" data-idx="${i}" data-field="qty" style="width:80px;padding:6px;"></td>
+            <td><input type="number" value="${l.rate||''}" min="0" step="0.01" data-idx="${i}" data-field="rate" style="width:100px;padding:6px;"></td>
+            <td><input type="number" value="${l.gstRate||0}" min="0" step="0.01" data-idx="${i}" data-field="gstRate" style="width:70px;padding:6px;"></td>
+            <td>₹${fmt(lineTotal+gstAmt)}</td>
+            <td><button data-remove="${i}" style="background:none;border:0;color:#c0392b;cursor:pointer;"><i class="fa-solid fa-trash"></i> </button></td>
+        </tr>`;
+    }).join('');
+    updateTotals();
+}
+function updateTotals(){
+    let subtotal=0, gst=0;
+    lines.forEach(l=>{
+        const lt=(l.qty||0)*(l.rate||0);
+        subtotal += lt;
+        gst += lt*((l.gstRate||0)/100);
+    });
+    document.getElementById('sumSubtotal').textContent = fmt(subtotal);
+    document.getElementById('sumGst').textContent = fmt(gst);
+    document.getElementById('sumTotal').textContent = fmt(subtotal+gst);
+}
+document.addEventListener('input', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    const field = e.target.getAttribute('data-field');
+    if(idx===null || !field) return;
+    lines[idx][field] = field==='description' ? e.target.value : (parseFloat(e.target.value)||0);
+    updateTotals();
+});
+document.addEventListener('click', function(e){
+    const removeIdx = e.target.getAttribute('data-remove');
+    if(removeIdx!==null){ lines.splice(parseInt(removeIdx),1); renderLines(); }
+});
+function addLine(){ lines.push({description:'',qty:1,rate:0,gstRate:18}); renderLines(); }
+
+async function saveInvoice(postImmediately){
+    const vendorId = document.getElementById('fVendor').value;
+    const invoiceDate = document.getElementById('fDate').value;
+    const narration = document.getElementById('fNarration').value.trim();
+    const vendorInvoiceNo = document.getElementById('fVendorInvoiceNo').value.trim();
+    if(!vendorId){ alert('Please select a vendor.'); return; }
+    if(!invoiceDate){ alert('Invoice date is required.'); return; }
+    const validLines = lines.filter(l=>l.description && l.qty>0 && l.rate>=0);
+    if(!validLines.length){ alert('At least one line item is required.'); return; }
+
+    try{
+        const invoice = await window.Api.post('/purchase-invoices', {
+            vendorId: Number(vendorId),
+            invoiceDate,
+            vendorInvoiceNo: vendorInvoiceNo || undefined,
+            narration: narration || undefined,
+            lines: validLines.map(l=>({ description: l.description, qty: l.qty, rate: l.rate, gstRate: l.gstRate||0 })),
+        });
+        if(postImmediately){
+            await window.Api.post('/purchase-invoices/'+invoice.id+'/post');
+            alert('Invoice created and posted.');
+        } else {
+            alert('Invoice saved as draft.');
+        }
+        window.location.href = 'purchase-invoices.html';
+    }catch(e){
+        alert('Could not save invoice: '+(e.message||'Unknown error'));
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

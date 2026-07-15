@@ -1,0 +1,74 @@
+/* Lucky floating assistant styles. Only loaded (via a dynamically
+   injected <link>) when window.LUCKY_ENABLED === true — see
+   js/shell.js. Never linked from any page's <head> directly. */
+
+.lucky-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(31,107,255,0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.lucky-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(31,107,255,0.5);
+}
+.lucky-icon { font-size: 16px; }
+
+.lucky-panel {
+    position: fixed;
+    bottom: 76px;
+    right: 24px;
+    width: 320px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    z-index: 500;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.lucky-panel.open { display: flex; }
+.lucky-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--primary-color);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+}
+.lucky-close {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+}
+.lucky-panel-body {
+    flex: 1;
+    min-height: 160px;
+    overflow-y: auto;
+}
+
+/* Mobile: keep clear of the sidebar toggle / avoid overlapping content */
+@media (max-width: 900px) {
+    .lucky-btn { bottom: 16px; right: 16px; }
+    .lucky-panel { right: 16px; left: 16px; width: auto; }
+}

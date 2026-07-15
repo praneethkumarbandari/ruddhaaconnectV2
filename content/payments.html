@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payments</title>
+<script>(function(){try{const t=JSON.parse(localStorage.getItem('portalTheme')||'{}');if(t.primary_color)document.documentElement.style.setProperty('--primary-color',t.primary_color);if(t.secondary_color)document.documentElement.style.setProperty('--secondary-color',t.secondary_color);if(t.background_color)document.documentElement.style.setProperty('--background-color',t.background_color);if(t.font_family)document.documentElement.style.setProperty('--font-family',t.font_family);}catch(e){}}());</script>
+<script src="/js/theme-boot.js"></script>
+        <link rel="stylesheet" href="/css/variables.css">
+        <link rel="stylesheet" href="/css/global.css">
+        <link rel="stylesheet" href="/css/layout.css">
+        <link rel="stylesheet" href="/css/cards.css">
+        <link rel="stylesheet" href="/css/buttons.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="/css/forms.css">
+        <link rel="stylesheet" href="/css/tables.css">
+        <link rel="stylesheet" href="/css/modals.css">
+        <link rel="stylesheet" href="/css/utilities.css">
+        <link rel="stylesheet" href="/css/responsive.css">
+<style>body { padding: 24px; box-sizing: border-box; background: var(--background-color, #f5f7fb); }</style>
+</head>
+<body>
+  <div class="main" id="mainContent">
+    <div class="page-header">
+        <h2>Payments</h2>
+        <button class="btn-primary" onclick="openPaymentModal()">＋ New Payment</button>
+    </div>
+    <!--
+      NOTE: this page did not exist anywhere in the original shell.
+      Built new. IMPORTANT: this page does not compute or display a
+      remaining-outstanding-per-invoice figure client-side — that
+      calculation belongs to the backend alone (which validates every
+      allocation against the invoice's actual remaining balance; see
+      Patch 1, Defect 2). The invoice picker below shows each posted
+      invoice's real total only; if an allocation would exceed what's
+      actually still owed, the backend rejects it with a specific
+      error message naming the real remaining amount, which is
+      surfaced here rather than guessed at.
+    -->
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Payment No.</th><th>Date</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="tableBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="paymentModal">
+  <div class="modal" style="max-width:750px;">
+    <div class="modal-header"><h3>New Payment</h3><button class="modal-header-close" onclick="document.getElementById('paymentModal').classList.remove('active')"><i class="fa-solid fa-xmark"></i> </button></div>
+    <div class="modal-body">
+      <div class="msg-inline" id="modalMsg"></div>
+      <div class="field-row">
+        <div class="field"><label>Vendor *</label><select id="fVendor" onchange="onVendorChange()"><option value="">Select vendor…</option></select></div>
+        <div class="field"><label>Payment Date *</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Amount Paid *</label><input type="number" id="fAmount" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>Paid From *</label><select id="fBankAccount"><option value="">Select account…</option></select></div>
+        <div class="field"><label>TDS Section (if applicable)</label><select id="fTdsSection"><option value="">None</option></select></div>
+      </div>
+      <div class="field"><label>Narration</label><input type="text" id="fNarration" placeholder="Optional note"></div>
+
+      <div style="margin-top:14px;">
+        <label style="font-weight:600;font-size:13px;">Allocate to Invoices</label>
+        <table style="margin-top:6px;">
+          <thead><tr><th>Invoice</th><th>Invoice Total</th><th>Allocated Amount</th><th></th></tr></thead>
+          <tbody id="allocBody"></tbody>
+        </table>
+        <button class="btn-secondary" onclick="addAllocLine()" style="margin-top:8px;">+ Add Allocation</button>
+        <p style="font-size:12px;color:#888;margin-top:6px;">Select a vendor first to see their posted invoices. Allocations are validated by the server against each invoice's actual remaining balance — over-allocating will be rejected with the real figure.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="savePayment(false)">Save as Draft</button>
+      <button class="btn-primary" onclick="savePayment(true)">Save &amp; Post</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allRows=[], custInvoices=[], allocations=[{purchaseInvoiceId:'',allocatedAmount:0}];
+function fmt(n){return parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+window.addEventListener('DOMContentLoaded', function(){
+    if (!window.Auth.isAuthenticated()) { window.Auth.checkAuth(); return; }
+    const emp = window.Auth.getEmployee();
+    if(emp){(function(){var el=document.getElementById('employeeName');if(el)el.textContent=emp.employeeName||emp.username||'—';})();(function(){var el=document.getElementById('employeeMeta');if(el)el.textContent='—';})();}
+    setupSidebar();
+    loadPayments();
+});
+
+async function loadPayments(){
+    try{
+        allRows = await window.Api.get('/payments');
+        renderTable(allRows);
+    }catch(e){
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="6" class="empty-state">Could not load payments: '+(e.message||'Unknown error')+'</td></tr>';
+    }
+}
+function renderTable(rows){
+    const tbody = document.getElementById('tableBody');
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No payments found.</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td>${r.payment_no||'(draft)'}</td>
+        <td>${r.payment_date?new Date(r.payment_date).toLocaleDateString('en-IN'):'—'}</td>
+        <td>${escapeHtml(r.vendor_name)||('#'+r.vendor_id)}</td>
+        <td>₹${fmt(r.amount)}</td>
+        <td><span class="badge ${r.status}">${r.status}</span></td>
+        <td>${r.status==='draft'?`<button class="action-btn" onclick="postPayment('${r.id}')"><i class="fa-solid fa-check"></i> Post</button>`:(r.status==='posted'?`<button class="action-btn" onclick="cancelPayment('${r.id}')"><i class="fa-solid fa-xmark"></i> Cancel</button>`:'—')} <button class="action-btn" onclick="downloadPaymentPdf('${r.id}','${r.payment_no||r.id}')"><i class="fa-solid fa-download"></i> PDF</button></td>
+    </tr>`).join('');
+}
+async function downloadPaymentPdf(id, docNo){
+    try{ await window.Api.downloadFile('/payments/'+id+'/pdf', 'payment-'+docNo+'.pdf'); }
+    catch(e){ alert('Could not download PDF: '+(e.message||'Unknown error')); }
+}
+async function postPayment(id){
+    if(!confirm('Post this payment?')) return;
+    try{ await window.Api.post('/payments/'+id+'/post'); loadPayments(); }
+    catch(e){ alert('Could not post: '+(e.message||'Unknown error')); }
+}
+async function cancelPayment(id){
+    const reason = prompt('Reason for cancelling this payment:');
+    if(reason===null) return;
+    if(!reason.trim()){ alert('A reason is required.'); return; }
+    try{ await window.Api.post('/payments/'+id+'/cancel', { reason: reason.trim() }); loadPayments(); }
+    catch(e){ alert('Could not cancel: '+(e.message||'Unknown error')); }
+}
+
+async function openPaymentModal(){
+    document.getElementById('fDate').valueAsDate = new Date();
+    document.getElementById('fAmount').value = '';
+    document.getElementById('fNarration').value = '';
+    document.getElementById('modalMsg').textContent = '';
+    allocations = [{purchaseInvoiceId:'',allocatedAmount:0}];
+    custInvoices = [];
+    try{
+        const vendors = await window.Api.get('/vendors');
+        document.getElementById('fVendor').innerHTML = '<option value="">Select vendor…</option>' + vendors.filter(c=>c.is_active!==false).map(c=>`<option value="${c.id}">${escapeHtml(c.vendor_name)}</option>`).join('');
+    }catch(e){}
+    try{
+        // FIX: this used to query Chart of Accounts and filter by
+        // hardcoded codes ('1000'/'1100') or a regex on the LEDGER
+        // control account name ("Cash"/"Bank") — showing generic
+        // entries like "1000 — Cash" instead of your actual named
+        // bank accounts (e.g. "HDFC Current — XXXX1234"). This now
+        // queries the real bank_accounts table, showing each
+        // account's own name while still submitting the correct
+        // linked ledger account_code for posting.
+        const bankAccounts = await window.Api.get('/bank-accounts/accounts');
+        document.getElementById('fBankAccount').innerHTML = '<option value="">Select account…</option>' + bankAccounts.map(a=>`<option value="${a.account_code}">${escapeHtml(a.account_name)}${a.bank_name?' ('+escapeHtml(a.bank_name)+(a.account_number?' — '+escapeHtml(a.account_number.slice(-4)):'')+')':''}</option>`).join('');
+    }catch(e){}
+    try{
+        const sections = await window.Api.get('/tds/sections');
+        document.getElementById('fTdsSection').innerHTML = '<option value="">None</option>' + sections.filter(s=>s.is_active!==false).map(s=>`<option value="${s.id}">${s.section_code} — ${s.section_name} (${s.rate_percentage}%)</option>`).join('');
+    }catch(e){}
+    renderAllocations();
+    document.getElementById('paymentModal').classList.add('active');
+}
+async function onVendorChange(){
+    const vendorId = document.getElementById('fVendor').value;
+    custInvoices = [];
+    if(vendorId){
+        try{
+            const all = await window.Api.get('/purchase-invoices?status=posted');
+            custInvoices = all.filter(i => String(i.vendor_id) === String(vendorId));
+        }catch(e){}
+    }
+    allocations = [{purchaseInvoiceId:'',allocatedAmount:0}];
+    renderAllocations();
+}
+function renderAllocations(){
+    document.getElementById('allocBody').innerHTML = allocations.map((a,i)=>`<tr>
+        <td><select data-idx="${i}" data-field="purchaseInvoiceId" style="width:100%;padding:6px;">
+            <option value="">Select invoice…</option>
+            ${custInvoices.map(inv=>`<option value="${inv.id}" ${String(a.purchaseInvoiceId)===String(inv.id)?'selected':''}>${inv.invoice_no} — ₹${fmt(inv.total)}</option>`).join('')}
+        </select></td>
+        <td>${(()=>{const inv=custInvoices.find(x=>String(x.id)===String(a.purchaseInvoiceId));return inv?'₹'+fmt(inv.total):'—';})()}</td>
+        <td><input type="number" min="0" step="0.01" value="${a.allocatedAmount||''}" data-idx="${i}" data-field="allocatedAmount" style="width:100%;padding:6px;"></td>
+        <td><button data-remove="${i}" style="background:none;border:0;color:#c0392b;cursor:pointer;"><i class="fa-solid fa-trash"></i> </button></td>
+    </tr>`).join('');
+}
+document.addEventListener('change', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    if(idx===null) return;
+    if(e.target.getAttribute('data-field')==='purchaseInvoiceId'){ allocations[idx].purchaseInvoiceId = e.target.value; renderAllocations(); }
+});
+document.addEventListener('input', function(e){
+    const idx = e.target.getAttribute('data-idx');
+    if(idx===null) return;
+    if(e.target.getAttribute('data-field')==='allocatedAmount'){ allocations[idx].allocatedAmount = parseFloat(e.target.value)||0; }
+});
+document.addEventListener('click', function(e){
+    const removeIdx = e.target.getAttribute('data-remove');
+    if(removeIdx!==null && document.getElementById('paymentModal').classList.contains('active')){ allocations.splice(parseInt(removeIdx),1); renderAllocations(); }
+});
+function addAllocLine(){ allocations.push({purchaseInvoiceId:'',allocatedAmount:0}); renderAllocations(); }
+
+async function savePayment(postImmediately){
+    const vendorId = document.getElementById('fVendor').value;
+    const paymentDate = document.getElementById('fDate').value;
+    const amount = parseFloat(document.getElementById('fAmount').value)||0;
+    const bankAccountCode = document.getElementById('fBankAccount').value;
+    const tdsSectionId = document.getElementById('fTdsSection').value;
+    const narration = document.getElementById('fNarration').value.trim();
+    const msg = document.getElementById('modalMsg');
+    if(!vendorId){ msg.textContent='Please select a vendor.'; return; }
+    if(!paymentDate){ msg.textContent='Payment date is required.'; return; }
+    if(!amount || amount<=0){ msg.textContent='Amount must be greater than zero.'; return; }
+    if(!bankAccountCode){ msg.textContent='Please select where this was deposited.'; return; }
+    const validAllocs = allocations.filter(a=>a.purchaseInvoiceId && a.allocatedAmount>0);
+    try{
+        const payment = await window.Api.post('/payments', {
+            vendorId: Number(vendorId), paymentDate, amount, bankAccountCode,
+            allocations: validAllocs.map(a=>({ purchaseInvoiceId: Number(a.purchaseInvoiceId), allocatedAmount: a.allocatedAmount })),
+            narration: narration || undefined,
+            tdsSectionId: tdsSectionId ? Number(tdsSectionId) : null,
+        });
+        if(postImmediately){
+            await window.Api.post('/payments/'+payment.id+'/post');
+            alert('Payment '+(payment.payment_no||payment.id)+' created and posted.');
+        } else {
+            alert('Payment saved as draft.');
+        }
+        document.getElementById('paymentModal').classList.remove('active');
+        loadPayments();
+    }catch(e){
+        // This is where the real backend validation surfaces — e.g. an
+        // over-allocation attempt returns the invoice's actual remaining
+        // balance in the error message (Patch 1, Defect 2 fix).
+        msg.textContent = 'Could not save payment: '+(e.message||'Unknown error');
+    }
+}
+function setupSidebar(){const toggle=document.getElementById('sidebarToggle'),sidebar=document.getElementById('sidebar'),overlay=document.getElementById('sidebarOverlay');if(toggle&&sidebar)toggle.addEventListener('click',function(){if(window.innerWidth<=900){sidebar.classList.toggle('mobile-open');if(overlay)overlay.classList.toggle('active');}else{sidebar.classList.toggle('collapsed');document.getElementById('mainContent').classList.toggle('expanded');}});}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').classList.remove('active');}
+function logout(){window.Auth.logout();}
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/api-client.js"></script>
+<script src="/js/escape-html.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/navigation.js"></script>
+<script src="/js/modal.js"></script>
+<script src="/js/toast.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
